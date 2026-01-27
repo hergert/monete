@@ -221,7 +221,10 @@ async function main() {
     }
 
     // Use last signature for pagination
-    before = signatures[signatures.length - 1].signature;
+    const lastSig = signatures[signatures.length - 1];
+    if (lastSig) {
+      before = lastSig.signature;
+    }
   }
 
   console.log("");
@@ -229,6 +232,9 @@ async function main() {
 
   // Save to files
   for (let i = 0; i < collected.length; i++) {
+    const item = collected[i];
+    if (!item) continue;
+
     const idx = existingCount + i + 1;
     const filename = `bags_${String(idx).padStart(2, "0")}.json`;
     const filepath = join(FIXTURES_DIR, filename);
@@ -237,9 +243,9 @@ async function main() {
       _meta: {
         source: "helius",
         collected_at: new Date().toISOString(),
-        signature: collected[i].signature,
+        signature: item.signature,
       },
-      ...collected[i].tx,
+      ...(item.tx as Record<string, unknown>),
     };
 
     await writeFile(filepath, JSON.stringify(fixture, null, 2));

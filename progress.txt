@@ -130,3 +130,9 @@ Bags launch = Fee Share V1 + DBC program in same tx
 **Fix**: Created `scripts/collect-bags.ts` to fetch real Bags launch transactions from Helius API. The script queries the Fee Share V1 program (`FEEhPbKVKnco9EXnaY3i4R5rQVUx91wgVfu8qokixywi`) for transaction signatures, fetches full transaction data, and filters for transactions that also contain the Meteora DBC program. Collected 10 real Bags launch transactions as fixtures in `data/fixtures/bags/bags_01.json` through `bags_10.json`.
 **Result**: PASS
 
+## Iteration 5
+**Gate**: typecheck
+**Error**: scripts/collect-bags.ts had TS2532 errors at lines 224, 240, 242 - "Object is possibly 'undefined'"
+**Fix**: Added null checks for array element access: wrapped `signatures[signatures.length - 1]` in a conditional, and added a guard + type assertion for `collected[i]` in the save loop.
+**Result**: PASS
+
