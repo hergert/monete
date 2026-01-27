@@ -1,156 +1,282 @@
 # TODO — Monenete
 
-> Architecture and vision: see `docs/PLAN.md`
+## How to Use This File
+- Pick the FIRST unchecked item
+- Do ONLY that item
+- Verify it works
+- Check it off
+- Journal in progress.txt
+- Repeat
+
+## Legend
+- [ ] Task to do
+- [x] Done
+- [GATE] Stop and evaluate before continuing
+- [OPTIONAL] Not required for completion
+- [NEEDS: X] Requires X to be done first
 
 ---
 
-## Phase 0: Foundation
+## Phase 0: Foundation (make the loop runnable)
 
-### 0.1 Repo Plumbing
-- [ ] Docker Postgres works (`docker compose up -d db`)
-- [ ] DB connection and migrations run
-- [ ] Lint, typecheck, test scripts work
-- [ ] `./scripts/verify.sh` runs (may fail initially)
+### 0.1 Docker + Database
+- [x] Verify docker is installed: `docker --version`
+- [x] Create docker-compose.yml with postgres service
+- [x] Run `docker compose up -d db` successfully
+- [x] Verify DB is ready: `docker compose exec db pg_isready`
 
-### 0.2 Data Collection
-**Goal**: Collect offline test fixtures for deterministic validation.
+### 0.2 Project Setup
+- [x] Verify bun is installed: `bun --version`
+- [x] Initialize package.json if missing: `bun init -y`
+- [ ] Add postgres dependency: `bun add postgres`
+- [x] Create src/ directory structure
 
-**Bags fixtures** (`data/fixtures/bags/`):
-- [ ] ≥10 raw transaction JSON files
-- [ ] Each is a confirmed Bags.fm launch (has Fee Share V1 + DBC)
+### 0.3 Database Connection
+- [ ] Create src/db/index.ts with connection helper
+- [ ] Verify connection works: `bun run src/db/index.ts` prints "connected"
 
-**Non-Bags fixtures** (`data/fixtures/non_bags_dbc/`):
-- [ ] ≥20 raw transaction JSON files
-- [ ] Each uses Meteora DBC but is NOT from Bags.fm
+### 0.4 Migrations
+- [x] Create src/db/migrate.ts (exists but needs postgres client)
+- [ ] Add postgres dependency and implement DB connection in migrate.ts
+- [ ] Run migrations: `bun run src/db/migrate.ts`
+- [ ] Verify tables exist: `\dt` shows 7 tables
 
-**Why**: The loop must validate without network calls. Fixtures are ground truth.
+### 0.5 Scripts
+- [x] Create scripts/verify.sh (can fail, but runs)
+- [x] Make executable: `chmod +x scripts/*.sh`
+- [x] Run: `./scripts/verify.sh` executes without "not found" errors
 
----
-
-## Phase 1: Signature Detection
-
-### 1.1 Bags Launch Classifier
-**Goal**: Reliably detect Bags.fm launches vs other Meteora DBC uses.
-
-**Key insight** (from research):
-- Fee Share V1 (`FEEhPbKVKnco9EXnaY3i4R5rQVUx91wgVfu8qokixywi`) is the Bags differentiator
-- DBC alone causes false positives (shared Meteora infra)
-
-**Requirements**:
-- [ ] Classifier exists that takes a transaction → returns match/no-match
-- [ ] Passes on all Bags fixtures
-- [ ] False positive rate ≤5% on non-Bags fixtures
-- [ ] Output: `bags_signature_v1.json` with rules + test vectors
+[GATE] Phase 0 complete when:
+- `docker compose up -d db` succeeds
+- `bun run src/db/migrate.ts` runs without error
+- `./scripts/verify.sh` runs (may fail checks, but executes)
 
 ---
 
-## Phase 2: Data Pipeline
+## Phase 1: Data Collection (gather test fixtures)
 
-### 2.1 Ingestion
-**Goal**: Read events from replay file (offline) or chain (live, optional).
+### 1.1 Directory Structure
+- [x] Create data/fixtures/bags/ directory
+- [x] Create data/fixtures/non_bags_dbc/ directory
+- [x] Create data/replay/ directory
 
-**Requirements**:
-- [ ] Replay mode reads `data/replay/events.jsonl`
-- [ ] Events written to database
-- [ ] Live mode is optional (requires API keys)
+### 1.2 Bags Fixtures (10 required)
+[NEEDS: Helius API key OR manually collected files]
 
-### 2.2 Normalization + Dedupe
-**Goal**: Ensure each event is recorded exactly once.
+Method A (with API):
+- [ ] Create scripts/collect-bags.ts
+- [ ] Fetch 10+ transactions from Fee Share V1 program
+- [ ] Save to data/fixtures/bags/bags_01.json through bags_10.json
+- [ ] Verify: `ls data/fixtures/bags/*.json | wc -l` >= 10
 
-**Requirements**:
-- [ ] Dedupe key: `(signature, instruction_index)`
-- [ ] Duplicate inserts are rejected/ignored
-- [ ] All 7 tables exist (raw_events, launches, wallet_actions, quotes, positions, wallet_scores, trade_journal)
+Method B (manual):
+- [ ] Document in progress.txt: "Need human to collect Bags fixtures"
+- [ ] Add `<promise>NEED_HUMAN</promise>` if blocked
 
----
+### 1.3 Non-Bags DBC Fixtures (20 required)
+- [ ] Fetch 20+ DBC transactions WITHOUT Fee Share V1
+- [ ] Save to data/fixtures/non_bags_dbc/non_bags_01.json etc
+- [ ] Verify: `ls data/fixtures/non_bags_dbc/*.json | wc -l` >= 20
 
-## Phase 3: Analytics
+### 1.4 Verify Fixtures
+- [ ] All JSON files are valid: `for f in data/fixtures/**/*.json; do jq . "$f" > /dev/null; done`
+- [ ] Bags fixtures contain Fee Share V1 program
+- [ ] Non-Bags fixtures do NOT contain Fee Share V1 program
 
-### 3.1 Wallet Scoring
-**Goal**: Identify wallets with replicable edge (not bots, not insiders).
-
-**Exclusion rules**:
-- Deployer-like (created tokens)
-- Sniper-like (>50% buys within 5s of launch)
-- Insufficient data (<5 signals)
-- Negative edge (EV lower bound < 0)
-
-**Requirements**:
-- [ ] Each wallet gets a score with confidence bounds
-- [ ] Output: `reports/wallet_report.json`
-- [ ] At least 1 eligible wallet in replay dataset
-
-### 3.2 Quote Service
-**Goal**: Get swap quotes for position sizing.
-
-**Requirements**:
-- [ ] Stub implementation for replay (returns synthetic quotes)
-- [ ] Real implementation optional (Jupiter API)
+[GATE] Phase 1 complete when:
+- 10+ Bags fixtures committed
+- 20+ non-Bags fixtures committed
+- All valid JSON
 
 ---
 
-## Phase 4: Strategy + Paper Trading
+## Phase 2: Signature Detection
 
-### 4.1 Strategy Engine
-**Goal**: Decide whether to enter a position based on wallet convergence.
+### 2.1 Constants
+- [x] Create src/constants.ts with program IDs (in src/signature.ts):
+  - BAGS_FEE_SHARE_V1 = "FEEhPbKVKnco9EXnaY3i4R5rQVUx91wgVfu8qokixywi"
+  - METEORA_DBC = "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN"
 
-**Requirements**:
-- [ ] Convergence scoring (sum of wallet weights)
-- [ ] Entry threshold
-- [ ] Fee-aware position sizing (skip if fees eat edge)
-- [ ] All decisions logged to trade_journal
+### 2.2 Program Extraction
+- [x] Create src/signature.ts (exists with stubs)
+- [ ] Implement extractPrograms(tx) → Set<string>
+- [ ] Test: extractPrograms on a Bags fixture returns Fee Share V1
 
-### 4.2 Paper Trading
-**Goal**: Simulate positions with realistic exit rules.
+### 2.3 DBC Init Detection
+- [ ] Implement hasDbcInit(tx) → boolean
+- [ ] Test: hasDbcInit on a Bags fixture returns true
 
-**Exit rules**:
-- Take profit (TP)
-- Stop loss (SL)
-- Timeout
+### 2.4 Bags Classifier
+- [ ] Implement isBagsLaunchTx(tx) → { match: boolean, reasons: string[] }
+- [ ] Rule: match = hasFeeShareV1 AND hasDbc AND hasDbcInit
 
-**Requirements**:
-- [ ] Positions tracked with entry/exit
-- [ ] PnL calculated
-- [ ] Output: `reports/paper_trading_report.json`
+### 2.5 Validation Script
+- [x] Create src/validate-signature.ts (exists)
+- [ ] Run against all fixtures (needs fixtures first)
+- [ ] Calculate false positive rate
+- [ ] Write reports/signature_validation.json
 
----
+### 2.6 Signature Artifact
+- [ ] Create bags_signature_v1.json with:
+  - programs
+  - rules
+  - test_vectors (signatures from fixtures)
+  - validation results
 
-## Phase 5: E2E Validation
-
-### 5.1 E2E Runner
-**Goal**: Single command runs everything and produces final report.
-
-**Command**: `bun run e2e:replay`
-
-**Must**:
-- [ ] Ensure Postgres is running
-- [ ] Run migrations
-- [ ] Process replay events
-- [ ] Run all analytics
-- [ ] Run paper trading
-- [ ] Write `reports/final_validation.json`
-
-### 5.2 Completion Gate
-**All must be true**:
-- [ ] `./scripts/verify.sh` exits 0
-- [ ] `reports/final_validation.json` has `status: "PASS"`
-- [ ] `bags_signature_v1.json` exists
-- [ ] Required fixtures committed
+[GATE] Phase 2 complete when:
+- All Bags fixtures match
+- False positive rate <= 5%
+- bags_signature_v1.json exists
 
 ---
 
-## Done
+## Phase 3: Replay Ingestion
 
-When completion gate passes, append to `progress.txt`:
+### 3.1 Replay Event Schema
+- [ ] Define ReplayEvent type in src/types.ts
+- [ ] Types: "launch", "wallet_action", "quote"
+
+### 3.2 Build Replay Dataset
+- [ ] Create scripts/build-replay.ts
+- [ ] Read fixtures, generate synthetic events
+- [ ] Write data/replay/events.jsonl
+- [ ] Verify: `wc -l data/replay/events.jsonl` >= 50
+
+### 3.3 Replay Reader
+- [ ] Create src/ingestion/replay.ts
+- [ ] Implement readReplayEvents() → AsyncIterator<ReplayEvent>
+
+### 3.4 Normalizer
+- [ ] Create src/normalizer.ts
+- [ ] Implement normalizeEvent(event) → CanonicalEvent
+- [ ] Handle dedupe key: (signature, instruction_index)
+
+### 3.5 Database Writers
+- [ ] Implement insertRawEvent() with ON CONFLICT DO NOTHING
+- [ ] Implement insertLaunch()
+- [ ] Implement insertWalletAction()
+- [ ] Verify dedupe: inserting same event twice doesn't create duplicate
+
+### 3.6 Ingest Command
+- [ ] Create src/commands/ingest-replay.ts
+- [ ] Add to package.json: "ingest:replay"
+- [ ] Run: `bun run ingest:replay`
+- [ ] Verify: `SELECT COUNT(*) FROM raw_events` > 0
+
+[GATE] Phase 3 complete when:
+- `bun run ingest:replay` succeeds
+- Database has events
+- Dedupe constraint works
+
+---
+
+## Phase 4: Wallet Analytics
+
+### 4.1 Wallet Feature Extraction
+- [ ] Create src/wallet/features.ts
+- [ ] Implement computeWalletFeatures(wallet) → WalletFeatures
+
+### 4.2 Exclusion Rules
+- [ ] is_deployer_like check
+- [ ] is_sniper_like check (>50% buys within 5s)
+- [ ] insufficient_signals check (<5 signals)
+- [ ] negative_edge check (ev_lower_bound < 0)
+
+### 4.3 EV Calculation
+- [ ] Implement calculateEV(trades) → { mean, lower_bound }
+- [ ] Use 95% confidence interval
+
+### 4.4 Wallet Scoring Command
+- [ ] Create src/commands/analyze-wallets.ts
+- [ ] Add to package.json: "analyze:wallets"
+- [ ] Run: `bun run analyze:wallets`
+- [ ] Write reports/wallet_report.json
+- [ ] Save to wallet_scores table
+
+[GATE] Phase 4 complete when:
+- reports/wallet_report.json exists
+- At least 1 eligible wallet (or document why none)
+
+---
+
+## Phase 5: Strategy + Paper Trading
+
+### 5.1 Quote Service Stub
+- [ ] Create src/quote/stub.ts
+- [ ] Implement StubQuoteService for replay mode
+- [ ] Returns synthetic quotes from replay data
+
+### 5.2 Strategy Engine
+- [ ] Create src/strategy/index.ts
+- [ ] Implement convergence scoring
+- [ ] Implement entry threshold check
+- [ ] Implement fee-aware position sizing
+
+### 5.3 Trade Journal
+- [ ] Implement logDecision() → writes to trade_journal table
+- [ ] Every decision (TRADE or SKIP) must be logged
+
+### 5.4 Paper Trader
+- [ ] Create src/paper/index.ts
+- [ ] Implement PaperTrader class
+- [ ] Track positions with entry/exit
+- [ ] Implement exit rules: TP, SL, timeout
+
+### 5.5 Paper Trading Command
+- [ ] Create src/commands/paper-trade.ts
+- [ ] Add to package.json: "paper:trade"
+- [ ] Run: `bun run paper:trade`
+- [ ] Write reports/paper_trading_report.json
+
+[GATE] Phase 5 complete when:
+- trade_journal has entries
+- positions table has entries
+- reports/paper_trading_report.json exists
+
+---
+
+## Phase 6: E2E Runner
+
+### 6.1 Orchestrator
+- [ ] Create src/e2e-replay.ts
+- [ ] Sequence: ensure DB → migrate → ingest → analyze → paper trade → report
+
+### 6.2 Final Validation Report
+- [ ] Collect all metrics
+- [ ] Write reports/final_validation.json with:
+  - status: "PASS" or "FAIL"
+  - e2e_replay: { status }
+  - signature_gate: { false_positive_rate }
+  - db_integrity: { dedupe_ok }
+
+### 6.3 Verify Script
+- [ ] Update scripts/verify.sh to check all gates
+- [ ] Exit 0 only if all pass
+
+### 6.4 E2E Command
+- [ ] Add to package.json: "e2e:replay"
+- [ ] Run: `bun run e2e:replay`
+- [ ] Verify: exits 0, final_validation.json has status: "PASS"
+
+[GATE] Phase 6 complete when:
+- `./scripts/verify.sh` exits 0
+- reports/final_validation.json has status: "PASS"
+- bags_signature_v1.json exists
+
+---
+
+## Completion
+
+When ALL gates pass:
 ```
 <promise>COMPLETE</promise>
 ```
 
 ---
 
-## Optional (not required for completion)
+## Optional (not required)
 
-- [ ] Live ingestion with Helius WebSocket
-- [ ] Real Jupiter quote service
-- [ ] Real toxicity filter (Helius API)
-- [ ] Metrics to Axiom
+- [ ] [OPTIONAL] Live ingestion with Helius WebSocket
+- [ ] [OPTIONAL] Real Jupiter quote service
+- [ ] [OPTIONAL] Real toxicity filter
+- [ ] [OPTIONAL] Axiom metrics integration

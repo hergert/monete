@@ -107,5 +107,14 @@ Bags launch = Fee Share V1 + DBC program in same tx
 ## Ralph Iterations
 ---
 
+### Journal Format Template
+```
+## Iteration N (YYYY-MM-DD HH:MM)
+**Task**: [copied from TODO]
+**Actions**: [what you did]
+**Verification**: [command + result]
+**Next**: [next unchecked item]
+```
+
 <!-- Agent appends iteration notes below -->
 

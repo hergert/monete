@@ -32,8 +32,13 @@ The completion gate MUST be satisfiable with no API keys and no network calls.
 ---
 
 ## Task
-Pick the SINGLE most important unchecked item in `TODO.md` and do it.
+Pick the FIRST unchecked item in `TODO.md` and do it.
 Do not do large refactors.
+
+## Task Rules
+- If a task says `[NEEDS: X]`, check if X is available. If not, skip the task and document the blocker in progress.txt.
+- If stuck on the same task for 3 iterations, break it into smaller sub-tasks in TODO.md.
+- Always run the verification command specified in the task after completing it.
 
 ## Validation (REQUIRED)
 After changes, run:
