@@ -37,6 +37,7 @@
 
 ### 0.4 Migrations
 - [x] Create src/db/migrate.ts (exists but needs postgres client)
+- [ ] Add blockTime column to raw_events table (chain time, distinct from received_at)
 - [ ] Add postgres dependency and implement DB connection in migrate.ts
 - [ ] Run migrations: `bun run src/db/migrate.ts`
 - [ ] Verify tables exist: `\dt` shows 7 tables
@@ -104,6 +105,8 @@ Method B (manual):
 
 ### 2.3 DBC Init Detection
 - [ ] Implement hasDbcInit(tx) → boolean
+- [ ] Detect `initialize_virtual_pool_with_spl_token` instruction discriminator
+- [ ] Extract pool_authority from DBC init instruction (needed for toxicity filter)
 - [ ] Test: hasDbcInit on a Bags fixture returns true
 
 ### 2.4 Bags Classifier
@@ -118,10 +121,12 @@ Method B (manual):
 
 ### 2.6 Signature Artifact
 - [ ] Create bags_signature_v1.json with:
-  - programs
-  - rules
+  - programs (Fee Share V1, Meteora DBC)
+  - instruction_discriminators (initialize_virtual_pool_with_spl_token)
+  - required_account_roles (pool_authority position)
+  - rules (combination logic)
   - test_vectors (signatures from fixtures)
-  - validation results
+  - validation_results (FP rate, coverage)
 
 [GATE] Phase 2 complete when:
 - All Bags fixtures match
@@ -175,6 +180,12 @@ Method B (manual):
 ### 4.1 Wallet Feature Extraction
 - [ ] Create src/wallet/features.ts
 - [ ] Implement computeWalletFeatures(wallet) → WalletFeatures
+- [ ] Features to compute:
+  - signals_n (total trades)
+  - holding_half_life (median time held before first sell)
+  - trade_frequency (signals/day)
+  - sniper_score (% buys within 5s of launch)
+  - deployer_score (token creations / authority roles)
 
 ### 4.2 Exclusion Rules
 - [ ] is_deployer_like check
@@ -193,9 +204,18 @@ Method B (manual):
 - [ ] Write reports/wallet_report.json
 - [ ] Save to wallet_scores table
 
+### 4.5 Toxicity Filter (stub for replay)
+- [ ] Create src/toxicity/index.ts
+- [ ] Implement holder concentration check:
+  - Extract pool_authority from launch data
+  - Exclude protocol accounts (pool authority, vaults) from holder math
+  - Flag if largest non-protocol holder > 50%
+- [ ] For replay: use stub that returns { toxic: false } (real filter needs live data)
+
 [GATE] Phase 4 complete when:
 - reports/wallet_report.json exists
 - At least 1 eligible wallet (or document why none)
+- Toxicity filter stub exists
 
 ---
 
@@ -208,9 +228,16 @@ Method B (manual):
 
 ### 5.2 Strategy Engine
 - [ ] Create src/strategy/index.ts
-- [ ] Implement convergence scoring
-- [ ] Implement entry threshold check
-- [ ] Implement fee-aware position sizing
+- [ ] Implement convergence scoring:
+  - convergence_score = sum(wallet_weight for wallets buying within window)
+  - wallet_weight = clamp(ev_lower_bound, 0, cap)
+- [ ] Implement entry threshold check (score >= threshold)
+- [ ] Implement position sizing rule:
+  ```
+  position = min(quote_approved_size, 0.02 * capital)
+  if position < $10: SKIP (never force minimum)
+  ```
+- [ ] Require: toxicity filter pass, quote impact <= 2%
 
 ### 5.3 Trade Journal
 - [ ] Implement logDecision() → writes to trade_journal table
@@ -222,11 +249,20 @@ Method B (manual):
 - [ ] Track positions with entry/exit
 - [ ] Implement exit rules: TP, SL, timeout
 
-### 5.5 Paper Trading Command
+### 5.5 Circuit Breakers
+- [ ] Per-token breaker: sell fails twice → mark token toxic, skip future trades
+- [ ] Global breaker: 5 sell failures in 10 min → disable new entries
+- [ ] Track exit_success_rate in paper trading report
+- [ ] For replay: simulate failures based on fixture data (or assume success)
+
+### 5.6 Paper Trading Command
 - [ ] Create src/commands/paper-trade.ts
 - [ ] Add to package.json: "paper:trade"
 - [ ] Run: `bun run paper:trade`
-- [ ] Write reports/paper_trading_report.json
+- [ ] Write reports/paper_trading_report.json with:
+  - total_trades, win_rate, total_pnl
+  - exit_success_rate (simulated)
+  - circuit_breaker_triggers (count)
 
 [GATE] Phase 5 complete when:
 - trade_journal has entries
@@ -274,9 +310,24 @@ When ALL gates pass:
 
 ---
 
-## Optional (not required)
+## Optional (not required for offline E2E)
 
-- [ ] [OPTIONAL] Live ingestion with Helius WebSocket
-- [ ] [OPTIONAL] Real Jupiter quote service
-- [ ] [OPTIONAL] Real toxicity filter
+### Live Ingestion
+- [ ] [OPTIONAL] Helius Enhanced WebSocket (transactionSubscribe)
+  - Use `processed` commitment for fast detection
+  - Reconcile at `confirmed` for correctness
+  - Ping every 60s (Helius 10-min inactivity timer)
+  - Reconnect with backoff on disconnect
+  - Backfill recent slots on reconnect (cover gaps)
+- [ ] [OPTIONAL] Fallback: Helius webhooks (with idempotency)
+- [ ] [OPTIONAL] Cost tracking (Enhanced WSS is metered on newer plans)
+
+### Live Services
+- [ ] [OPTIONAL] Real Jupiter quote service (get_quote with slippage_bps)
+- [ ] [OPTIONAL] Real toxicity filter (holder concentration via Helius DAS)
+- [ ] [OPTIONAL] Jupiter Trigger/Limit v2 for automated TP/SL exits
+
+### Observability
 - [ ] [OPTIONAL] Axiom metrics integration
+- [ ] [OPTIONAL] Latency KPIs: detection_lag, execution_lag
+- [ ] [OPTIONAL] Weekly report generation

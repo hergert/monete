@@ -5,11 +5,13 @@
 
 const MIGRATIONS = [
   // raw_events - all ingested events
+  // Two timestamps: block_time (chain) vs received_at (ingestion)
   `CREATE TABLE IF NOT EXISTS raw_events (
     id SERIAL PRIMARY KEY,
     source TEXT NOT NULL,
     signature TEXT NOT NULL,
     slot BIGINT NOT NULL,
+    block_time TIMESTAMPTZ,
     instruction_index INT NOT NULL,
     received_at TIMESTAMPTZ DEFAULT NOW(),
     payload_json JSONB NOT NULL,
