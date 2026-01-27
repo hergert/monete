@@ -118,3 +118,15 @@ Bags launch = Fee Share V1 + DBC program in same tx
 
 <!-- Agent appends iteration notes below -->
 
+## Iteration 3
+**Gate**: migrations
+**Error**: migrate.ts was a stub - printed migrations but exited with code 1 without actually running them
+**Fix**: Implemented actual Postgres connection using the `postgres` package (already in dependencies). Script now connects to local docker DB (monenete/monenete@localhost:5432) and runs all 10 migrations (7 tables + 3 indexes).
+**Result**: PASS
+
+## Iteration 4
+**Gate**: fixtures_bags_count
+**Error**: have 0, need 10
+**Fix**: Created `scripts/collect-bags.ts` to fetch real Bags launch transactions from Helius API. The script queries the Fee Share V1 program (`FEEhPbKVKnco9EXnaY3i4R5rQVUx91wgVfu8qokixywi`) for transaction signatures, fetches full transaction data, and filters for transactions that also contain the Meteora DBC program. Collected 10 real Bags launch transactions as fixtures in `data/fixtures/bags/bags_01.json` through `bags_10.json`.
+**Result**: PASS
+

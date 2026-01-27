@@ -1,7 +1,7 @@
 // Database Migration Runner
 // Creates tables defined in specs/PROJECT_CONTRACT.md
 
-// TODO: Add postgres client (e.g., postgres or pg)
+import postgres from "postgres";
 
 const MIGRATIONS = [
   // raw_events - all ingested events
@@ -111,8 +111,15 @@ const MIGRATIONS = [
 async function main() {
   console.log("=== Database Migration ===\n");
 
-  // TODO: Connect to Postgres and run migrations
-  // For now, just print what would be run
+  // Connect to Postgres - use local docker DB by default
+  const sql = postgres({
+    host: process.env.DB_HOST || "localhost",
+    port: parseInt(process.env.DB_PORT || "5432"),
+    database: process.env.DB_DATABASE || "monenete",
+    username: process.env.DB_USER || "monenete",
+    password: process.env.DB_PASSWORD || "monenete",
+    ssl: process.env.DB_SSLMODE === "require" ? "require" : false,
+  });
 
   console.log("Migrations to run:");
   for (let i = 0; i < MIGRATIONS.length; i++) {
@@ -120,10 +127,25 @@ async function main() {
     const preview = migration.slice(0, 60).replace(/\n/g, " ");
     console.log(`  ${i + 1}. ${preview}...`);
   }
+  console.log("");
 
-  console.error("\nNot implemented: actual DB connection");
-  console.error("Add a postgres client (e.g., bun add postgres) and implement.");
-  process.exit(1);
+  // Run each migration
+  for (let i = 0; i < MIGRATIONS.length; i++) {
+    const migration = MIGRATIONS[i]!;
+    const name = migration.slice(0, 50).replace(/\n/g, " ");
+    try {
+      await sql.unsafe(migration);
+      console.log(`  ✓ ${i + 1}/${MIGRATIONS.length}: ${name}...`);
+    } catch (e) {
+      console.error(`  ✗ ${i + 1}/${MIGRATIONS.length}: ${name}...`);
+      console.error(`    Error: ${e instanceof Error ? e.message : e}`);
+      await sql.end();
+      process.exit(1);
+    }
+  }
+
+  console.log("\n=== All migrations complete ===");
+  await sql.end();
 }
 
 main().catch((e) => {

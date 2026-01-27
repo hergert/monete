@@ -1,39 +1,79 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Bounded Ralph loop with per-iteration logs
+# Verification-driven development loop
+# Each iteration: run verify → agent fixes first failure → verify again
 
 MAX_ITERS="${MAX_ITERS:-60}"
 SLEEP_SEC="${SLEEP_SEC:-1}"
 PROMPT_FILE="${PROMPT_FILE:-PROMPT.md}"
+REPORT_FILE="reports/verify_status.json"
 
-mkdir -p logs reports specs scripts data/fixtures/bags data/fixtures/non_bags_dbc data/replay
+# Handle Ctrl+C gracefully
+trap 'echo ""; echo "Interrupted by user"; exit 130' INT
+
+mkdir -p logs reports data/fixtures/bags data/fixtures/non_bags_dbc data/fixtures/wallet_actions data/fixtures/quotes data/fixtures/holders data/replay
 touch progress.txt
 
 for i in $(seq 1 "$MAX_ITERS"); do
-  echo "=== ITERATION $i $(date -Is) ===" | tee -a logs/run.log
+  echo ""
+  echo "═══════════════════════════════════════════════════════"
+  echo "  ITERATION $i  $(date '+%Y-%m-%dT%H:%M:%S')"
+  echo "═══════════════════════════════════════════════════════"
+  echo "ITERATION $i started at $(date '+%Y-%m-%dT%H:%M:%S')" >> logs/run.log
 
-  # Run agent (don't crash the loop if agent exits non-zero)
-  ./scripts/agent.sh "$PROMPT_FILE" 2>&1 | tee "logs/iter_${i}.agent.txt" || true
+  # Run verification BEFORE agent - so agent knows what's broken
+  echo ""
+  echo "▶ Running verification report..."
+  ./scripts/verify_report.sh "$REPORT_FILE" 2>&1 | tee "logs/iter_${i}.verify.txt" || true
 
-  # Run oracle pipeline (capture, don't crash)
-  ./scripts/verify.sh >"logs/iter_${i}.verify.txt" 2>&1 || true
-
-  # Capture repo diffstat for "no progress" detection by the agent
-  git diff --stat >"logs/iter_${i}.diffstat.txt" 2>/dev/null || true
-
-  # Success condition
-  if ./scripts/check_completion.sh 2>/dev/null; then
-    echo "COMPLETE at iteration $i" | tee -a logs/run.log
+  # Check if already complete
+  if [[ -f "$REPORT_FILE" ]] && grep -q '"failed": 0' "$REPORT_FILE" 2>/dev/null; then
+    echo ""
+    echo "════════════════════════════════════════"
+    echo "  ✓ ALL GATES PASS - COMPLETE at iteration $i"
+    echo "════════════════════════════════════════"
+    # Append COMPLETE promise if not already there
+    if ! grep -q "<promise>COMPLETE</promise>" progress.txt 2>/dev/null; then
+      echo "" >> progress.txt
+      echo "<promise>COMPLETE</promise>" >> progress.txt
+    fi
     exit 0
   fi
 
+  # Show what needs fixing
+  if [[ -f "$REPORT_FILE" ]]; then
+    first_failure=$(grep -o '"first_failure": "[^"]*"' "$REPORT_FILE" | cut -d'"' -f4)
+    if [[ -n "$first_failure" && "$first_failure" != "null" ]]; then
+      echo ""
+      echo "📍 Agent will work on: $first_failure"
+    fi
+  fi
+
+  # Run agent - it reads verify_status.json and fixes first failure
+  echo ""
+  echo "▶ Running agent..."
+  claude -p "$(cat "$PROMPT_FILE")" \
+    --output-format stream-json \
+    --verbose \
+    2>&1 | tee "logs/iter_${i}.json" | ITERATION="$i" python3 scripts/log_filter.py || true
+  echo "✓ Agent finished."
+
+  # Capture what changed
+  git diff --stat > "logs/iter_${i}.diffstat.txt" 2>/dev/null || true
+
   # Human needed condition
   if grep -q "<promise>NEED_HUMAN</promise>" progress.txt 2>/dev/null; then
-    echo "NEED_HUMAN signaled at iteration $i" | tee -a logs/run.log
+    echo ""
+    echo "════════════════════════════════════════"
+    echo "  ⚠ NEED_HUMAN signaled at iteration $i"
+    echo "════════════════════════════════════════"
+    cat "logs/iter_${i}.verify.txt" | grep -A1 "FIRST FAILURE" || true
     exit 2
   fi
 
+  echo ""
+  echo "→ Continuing to iteration $((i + 1))..."
   sleep "$SLEEP_SEC"
 done
 

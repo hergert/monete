@@ -1,81 +1,60 @@
-# Monenete Agent Prompt (Ralph)
+Read `reports/verify_status.json` to see what's broken.
 
-## Read (in this order)
-1. `docs/PLAN.md` — **THE GOAL** (architecture, vision, what we're building)
-2. `TODO.md` — work items (pick the next unchecked box)
-3. `progress.txt` — journal + known bugs/runbook
-4. `logs/iter_*.verify.txt` — what broke last time (if present)
+Your job: fix the **first failure** in the verification report.
 
----
+## Process
 
-## Definition of Done
+1. **Read the report** - `reports/verify_status.json` shows all gates (PASS/FAIL/SKIP)
+2. **Find first failure** - look at `summary.first_failure`
+3. **Understand the error** - read the `error` field for that gate
+4. **Fix it** - make the minimal change to make that gate pass
+5. **Verify your fix** - run the specific check to confirm it passes
+6. **Journal** - append to progress.txt what you fixed and the result
+7. **Commit** - if the gate now passes, commit with a concise message
 
-Completion is allowed ONLY when ALL are true:
+## Commit Rules
 
-1. `./scripts/verify.sh` exits 0
-2. `reports/final_validation.json` exists and contains:
-   - `status: "PASS"`
-   - `e2e_replay: { status: "PASS" }`
-   - `signature_gate: { false_positive_rate <= 0.05 }`
-   - `db_integrity: { dedupe_ok: true }`
-3. `bags_signature_v1.json` exists and is valid JSON
-4. A single command (`bun run e2e:replay`) runs E2E deterministically
+When your fix works (gate passes):
+- `git add` only the files you changed
+- Commit with a single-line message: `fix(<gate>): <what you fixed>`
+- Example: `fix(migrations): implement actual postgres connection`
+- NO body, NO Co-Authored-By
+- Never commit `.env` or secrets
 
-### Offline / Determinism Rule
-The completion gate MUST be satisfiable with no API keys and no network calls.
-Replay data must be real on-chain data captured ahead of time (no synthetic/mocked events).
-If real data is missing, block with NEED_HUMAN rather than stubbing.
+## Quality Rules
 
-### Replay Dataset Requirements
-- `data/replay/events.jsonl` (committed)
-- `data/fixtures/bags/*.json` (>=10)
-- `data/fixtures/non_bags_dbc/*.json` (>=20)
-- `data/fixtures/wallet_actions/*.json` (>=50)
-- `data/fixtures/quotes/*.json` (>=50)
-- `data/fixtures/holders/*.json` (>=bags fixtures count)
+- Fix the **root cause**, not symptoms
+- Make **minimal changes** - don't over-engineer
+- **Verify your fix works** before declaring done
+- If stuck after 3 attempts, document and signal NEED_HUMAN
+- **No pipes in bash** - run simple commands, no `|` or `2>&1`
+- Use `./scripts/verify_report.sh` to verify (not verify.sh)
 
----
+## Gate Dependencies
 
-## Task
-Pick the FIRST unchecked item in `TODO.md` and do it.
-Do not do large refactors.
+Some gates depend on others:
+- `signature_validation` needs fixtures to exist first
+- `e2e_replay` needs migrations + fixtures
+- If a gate is SKIP, fix its dependency first
 
-## Task Rules
-- If a task says `[NEEDS: X]`, check if X is available. If not, skip the task and document the blocker in progress.txt.
-- If stuck on the same task for 3 iterations, break it into smaller sub-tasks in TODO.md.
-- Always run the verification command specified in the task after completing it.
+## Signals
 
-## Validation (REQUIRED)
-After changes, run:
-```bash
-./scripts/verify.sh
+- **Blocked** (missing data, unclear, stuck): append `<promise>NEED_HUMAN</promise>` to progress.txt
+- **All gates pass**: the loop will detect this and mark COMPLETE
+
+## Context Files
+
+- `reports/verify_status.json` — what's broken (your primary input)
+- `TODO.md` — detailed task breakdown (reference)
+- `progress.txt` — history of what's been done
+- `logs/iter_*.verify.txt` — previous verification outputs
+
+## Journal Format (progress.txt)
+
 ```
-
-## Update rules
-- Check off completed items in `TODO.md`
-- Append 5–10 lines to `progress.txt` each iteration:
-  - what you changed
-  - verify result (pass/fail + first error)
-  - next most important item
-
-## Bugs / issues
-Add to the "Known Issues" section in `progress.txt`.
-
-## Git
-If `./scripts/verify.sh` passes AND you completed a checkbox:
-```bash
-git add -A && git commit -m "<short, specific message>"
-```
-
-Do NOT push unless explicitly instructed.
-
-## Stuck rule
-If the same failure repeats 3 iterations OR no progress:
-1. Write `BLOCKERS.md` (what you tried, what failed, smallest human action)
-2. Append: `<promise>NEED_HUMAN</promise>` to `progress.txt`
-
-## Completion
-When Definition of Done is satisfied, append to `progress.txt`:
-```
-<promise>COMPLETE</promise>
+## Iteration N
+**Gate**: <gate name that was failing>
+**Error**: <what the error was>
+**Fix**: <what you changed>
+**Result**: PASS | STILL_FAILING | NEED_HUMAN
 ```
