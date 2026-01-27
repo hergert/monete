@@ -1,5 +1,10 @@
 # IMPLEMENTATION_PLAN — Monenete E2E (Ralph)
 
+> **NOTE**: This file is the agent frontier.
+> - Keep items small and checkable.
+> - Do not duplicate `docs/TODO.md`.
+> - "Done" is defined only in `specs/PROJECT_CONTRACT.md`.
+
 **Read specs in order**: `specs/README.md` → `specs/PROJECT_CONTRACT.md` → numbered specs
 
 ---

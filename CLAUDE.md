@@ -1,52 +1,37 @@
-# Claude Rules
+# Claude Rules (Monenete)
 
-## Rules
+## Priority of truth
+1. `specs/PROJECT_CONTRACT.md` defines "done" (hard gates).
+2. `IMPLEMENTATION_PLAN.md` defines "what to do next" (frontier).
+3. `docs/TODO.md` is human backlog + journal (context, not authority).
+4. `docs/PLAN.md` is architecture reference (rarely changed).
 
-1. **Only commit when explicitly asked** — single line message, no body, no Co-Authored-By
-2. **Verify before done** — run `just test` and `just dev-validate`
-3. **Minimal changes** — smallest diff that solves the problem
-4. **No speculative work** — only what the task demands
-5. **Fix root cause** — don't patch symptoms
-6. **Ask when uncertain** — don't interpret ambiguous requests broadly
-7. **Test behavior, not implementation** — tests should verify what code does, not how it does it
+## Working rules
+1. **Smallest diff** that advances the next unchecked plan item.
+2. **No speculative work** — if it's not in the contract or plan, don't build it.
+3. **Verify before claiming progress** — run `./scripts/verify.sh` when changing code paths.
+4. **Fix root cause** — don't patch symptoms.
+5. **Autonomy > questions** — if uncertain, choose the simplest safe assumption and document it in `docs/ISSUES.md` or `docs/TODO.md`.
+
+## Ralph harness exception (commits)
+Commits are allowed when BOTH are true:
+- `./scripts/verify.sh` passes
+- you completed at least one checkbox item in `IMPLEMENTATION_PLAN.md`
+
+Commit format:
+- single line message, no body
+- no Co-Authored-By
+- never commit secrets
 
 ## Security
+- Never commit `.env`, API keys, or keypairs.
+- No secrets in logs or error messages.
+- Offline E2E must not require network calls.
 
-- Private keys NEVER in code or git
-- Use environment variables for all secrets
-- `.env` in `.gitignore`
-- Separate wallet for trading (not personal)
-- Transaction simulation before real executes
-- No secrets in logs or error messages
-
-## Quick Commands
-
+## Quick commands
 ```bash
-just                      # list all commands
-just test-helius          # test Helius RPC
-just test-db              # test Postgres
-just get-tx <sig>         # get transaction
-just save-tx <sig> <name> # save tx to data/
-just slot                 # current Solana slot
-just env-check            # verify env vars set
+./scripts/verify.sh
+./scripts/check_completion.sh
+bun run validate:signature
+bun run e2e:replay
 ```
-
-## Living Documents
-
-### docs/TODO.md — Work Tracker + Journal
-
-Update when:
-- Starting a session (where we left off)
-- Making decisions (log reasoning)
-- Completing work (move items, add learnings)
-- Hitting blockers (document what's stuck)
-
-Structure:
-- **Current Focus**: What we're doing now
-- **Backlog**: Tasks by phase
-- **Done**: Completed with dates
-- **Journal**: Append entries at bottom
-
-### docs/PLAN.md — Strategy + Architecture
-
-The authoritative plan. Update only when strategy changes.

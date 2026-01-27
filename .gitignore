@@ -1,17 +1,14 @@
 # Environment
 .env
 .env.*
-!.env.example
 
-# Keys
-*.json
-!package.json
-!tsconfig.json
-!docker-compose.yml
-!bags_signature_v1.json
+# Secrets / Keys
 keypair*.json
+*keypair*.json
+*.pem
+*.key
 
-# Node
+# Node/Bun
 node_modules/
 dist/
 build/
@@ -33,22 +30,18 @@ logs/
 reports/
 !reports/.gitkeep
 
-# Data (may contain sensitive wallet info)
-data/*
+# Data (default: ignore everything)
+data/**
 !data/.gitkeep
 !data/*.md
+
+# Allow deterministic offline datasets
 !data/fixtures/
+!data/fixtures/**
 !data/replay/
-data/fixtures/*
-!data/fixtures/.gitkeep
-!data/fixtures/bags/
-!data/fixtures/non_bags_dbc/
-data/fixtures/bags/*
-!data/fixtures/bags/.gitkeep
-data/fixtures/non_bags_dbc/*
-!data/fixtures/non_bags_dbc/.gitkeep
-data/replay/*
 !data/replay/.gitkeep
 !data/replay/events.jsonl
+
+# SQLite leftovers
 *.db
 *.sqlite
