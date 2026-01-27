@@ -10,37 +10,43 @@
 6. **Ask when uncertain** — don't interpret ambiguous requests broadly
 7. **Test behavior, not implementation** — tests should verify what code does, not how it does it
 
+## Security
+
+- Private keys NEVER in code or git
+- Use environment variables for all secrets
+- `.env` in `.gitignore`
+- Separate wallet for trading (not personal)
+- Transaction simulation before real executes
+- No secrets in logs or error messages
+
+## Quick Commands
+
+```bash
+just                      # list all commands
+just test-helius          # test Helius RPC
+just test-db              # test Postgres
+just get-tx <sig>         # get transaction
+just save-tx <sig> <name> # save tx to data/
+just slot                 # current Solana slot
+just env-check            # verify env vars set
+```
+
 ## Living Documents
 
-### docs/TODO.md — Project Journal
+### docs/TODO.md — Work Tracker + Journal
 
-This is the **living document** for tracking progress across sessions. Update it when:
-- Starting a new session (add context of where we left off)
-- Making design decisions (log the reasoning)
+Update when:
+- Starting a session (where we left off)
+- Making decisions (log reasoning)
 - Completing work (move items, add learnings)
-- Hitting blockers (document what's stuck and why)
+- Hitting blockers (document what's stuck)
 
 Structure:
-- **Current Focus**: What we're working on right now (update each session)
-- **Backlog**: Prioritized list of upcoming work
-- **Done**: Completed items with date
-- **Journal**: Chronological log — **append new entries at bottom**
+- **Current Focus**: What we're doing now
+- **Backlog**: Tasks by phase
+- **Done**: Completed with dates
+- **Journal**: Append entries at bottom
 
-Journal entry format:
-```
-## YYYY-MM-DD
+### docs/PLAN.md — Strategy + Architecture
 
-**Session: Brief title**
-
-What happened. Decisions made. Learnings.
-
-**Next:** What to do next session.
-
----
-```
-
-Keep the top sections lean. The journal grows — that's fine.
-
-### docs/PLAN.md — Strategy Document
-
-The authoritative plan. Update only when strategy changes, not for tactical updates.
+The authoritative plan. Update only when strategy changes.

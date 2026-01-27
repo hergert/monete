@@ -232,6 +232,62 @@ Latency KPIs require both.
 
 ---
 
+## Development Setup
+
+### Stack
+- **Runtime**: Bun
+- **Language**: TypeScript
+- **Database**: Postgres (Neon)
+- **Approach**: Research first, then code
+
+### External Services
+| Service | URL | Notes |
+|---------|-----|-------|
+| Helius | https://helius.dev | Free: 30 RPS, 100k credits/day |
+| Birdeye | https://birdeye.so | API key required |
+| Jupiter | https://station.jup.ag/docs | Free, no key |
+| Bags.fm | https://bags.fm | UI only |
+
+### Setup Commands
+```bash
+# Bun + deps (Phase 0A)
+curl -fsSL https://bun.sh/install | bash
+bun init -y
+bun add @solana/web3.js @coral-xyz/anchor helius-sdk
+
+# Jupiter (Phase 1)
+bun add @jup-ag/api
+
+# Solana CLI (Phase 2)
+sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+solana-keygen new --outfile ~/.config/solana/monenete.json
+```
+
+### Environment Variables
+```bash
+# .env (DO NOT COMMIT)
+HELIUS_API_KEY=xxx
+HELIUS_RPC_URL=https://mainnet.helius-rpc.com/?api-key=xxx
+DB_HOST=xxx
+DB_DATABASE=xxx
+DB_USER=xxx
+DB_PASSWORD=xxx
+DB_SSLMODE=require
+SOLANA_KEYPAIR_PATH=/path/to/monenete.json  # Phase 2 only
+```
+
+### Data Directory
+```
+data/
+├── bags_tokens.json        # Collected token addresses (gitignored)
+├── bags_programs.json      # Program IDs (gitignored)
+├── non_bags_dbc.json       # False positive test set (gitignored)
+├── signature_research.md   # Findings (tracked)
+└── sample_txs/             # Raw transaction JSON (gitignored)
+```
+
+---
+
 ## How It Works
 
 ### Phase 0A: Signature Validation (Days 1-3)
