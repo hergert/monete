@@ -168,7 +168,7 @@ Method B (manual):
 - [ ] Write reports/signature_validation.json with schema_version + generated_at + gate_passed
 
 ### 2.6 Signature Artifact
-- [ ] Create bags_signature_v1.json with:
+- [x] Create bags_signature_v1.json with:
   - programs (Fee Share V1, Meteora DBC)
   - instruction_discriminators (initialize_virtual_pool_with_spl_token)
   - required_account_roles (pool_authority position)

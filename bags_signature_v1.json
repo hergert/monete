@@ -1,0 +1,117 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-01-27T22:55:38.147Z",
+  "programs": {
+    "fee_share_v1": {
+      "address": "FEEhPbKVKnco9EXnaY3i4R5rQVUx91wgVfu8qokixywi",
+      "description": "Bags Fee Share V1 - primary Bags differentiator",
+      "required": true
+    },
+    "fee_share_v2": {
+      "address": "FEE2tBhKAt7shrod19QttSVREUYPiyMzoku1mL1gqVK",
+      "description": "Bags Fee Share V2 - appears unused",
+      "required": false
+    },
+    "meteora_dbc": {
+      "address": "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN",
+      "description": "Meteora Dynamic Bonding Curve - shared infra",
+      "required": true
+    },
+    "meteora_damm_v2": {
+      "address": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
+      "description": "Meteora DAMM v2 - post-migration pools",
+      "required": false
+    }
+  },
+  "instruction_discriminators": {
+    "initialize_virtual_pool_with_spl_token": {
+      "description": "DBC pool initialization instruction",
+      "notes": "Anchor discriminator: sha256('global:initialize_virtual_pool_with_spl_token')[0..8]"
+    }
+  },
+  "required_account_roles": {
+    "pool_authority": {
+      "index": 0,
+      "description": "PDA that controls the pool, must be excluded from holder concentration checks"
+    },
+    "quote_vault": {
+      "index": 7,
+      "description": "Vault holding quote token (SOL)"
+    },
+    "base_vault": {
+      "index": 8,
+      "description": "Vault holding base token (meme token)"
+    }
+  },
+  "rules": {
+    "bags_launch_match": {
+      "logic": "AND",
+      "conditions": [
+        {
+          "name": "has_fee_share_v1",
+          "description": "Transaction must contain Fee Share V1 program",
+          "program": "FEEhPbKVKnco9EXnaY3i4R5rQVUx91wgVfu8qokixywi"
+        },
+        {
+          "name": "has_dbc",
+          "description": "Transaction must contain Meteora DBC program",
+          "program": "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN"
+        }
+      ],
+      "notes": "Fee Share V1 is the key differentiator - DBC alone causes false positives"
+    }
+  },
+  "denylist": {
+    "patterns": [],
+    "notes": "Known non-Bags DBC patterns that should be excluded. Currently empty - FP rate is 0%."
+  },
+  "test_vectors": {
+    "should_match": [
+      "5Uj8oyQARcZNAeuV4NgwtKajj7Zs5QaqcQnYmLUeHvUn4ByS8XH9UDjt6m4zg43q33J4fNJ4MqSjZ4yEEmtr9cG4",
+      "5H8zHuLbe4UMEYJrcHQJFM2oUh85gdrtHTfUM63Csheq8njTYD4B6iNreMq3PPsUZEgqCg29q1fHdotJarFB6N1q",
+      "3AXvMXxkBXYB3NaBv6wrBKzF41TgMG9jkPopSBTapHUqSQTa7fa6b68HU1iHdz14XJV3bwFJY5xV4JhEgj6MQCaF",
+      "5s2GiAgBYgo6VzVd5kGA9xyLXCWYc7xsA8ffjeC8E6McnkdywQznfPitTH3uzeEqasZkZNdrJsKkHuu2sRzLhnMM",
+      "x9T7Gt4nnTrjcVousguTB4jfqU2YUP13tgiNq8RMo3oBXgSNWzHHks68mVNCeSdYZuAxNeV2ycJhZS51zsqUNV6",
+      "5ieGhrc7frsN1b75E3vNnXztbGwjrArPNjfSvRQAHWECUnCRHRxmjFUv6n7JXjKmpsA2irZ1ZQWv7skifoYYMu8o",
+      "gbXWN5RbaFqn4TYp71JrZ9FUfvkFsRNcFz4c53FarEwEUbbnCi7TSgJNSV1L8etLb9RUGZgjtGBRsq3N5HZKQGT",
+      "5G5RLTQzUyST95Ahg3nDypdQuZXHczESSakFBhWUkACrHH1ocXomheB62tiT2sYxeck3MCziezHwYR3LurakEoE5",
+      "3aZCH9qoyjAxxzB14KpKb5zmGmEt1iA4b8dwRujM44wQQCwy2FGD8v74XYjuwkfGw4r5BMQqoYUpvD8SWvjDf7oK",
+      "4cA1yxmSwj4RmoiNrnQKyohTqmvsJQbGrgH7JUpVdK8hfdBW6aRDbrSn73W513UH55DBjCEt2TKGZcgTkvqDw6Zj"
+    ],
+    "should_not_match": [
+      "5grXKwAzzD7YVspwSfowq9evLHrKPkLRx4FxTjsGaYDW7CVKp1m4HdgoAr2SHMVQpvMTw6U3epMwYorw9GquQfJz",
+      "4nxFsghPYgfaeiAYst3zGALf5LwSomNjR2ZJUXGGyQJkdYiw6qJUqeYss3fnLJYbyY6AU8t71SzfrYFuJosYEvFm",
+      "59Zpha7egbQnzGDeX9g7L5GTV2EnTv5SJZ8pL4DbpvAeW9zSasX3yN5VGc5QzCM8BHf9LJG1N5m6Zkd4TYPW2AUn",
+      "49KaNZpP1LnSLuNMJ837DPWpPQuW9ifDYTqQxqu2mgHBnJP1ug9VvsP1ReR9oTc8Pq9nE1bRPktjQvd9CZh2UTRd",
+      "2oDGQXwNJeq29wpwU7SsNQNmB8GY8J4yW43jydo48tL4D6qiSFqicFfP19d6EP3NMN4jKk53gR8NibvjLWju8YwM",
+      "2fH1JdG5waoM6BnxzJqm5AKUEhC5AnaYKmYK4M14sK2aPZqYSe7W7t1TP7MgRTBVSwyEnS5WhWnH7MGHkjtMXBu",
+      "5H3pjndxiyspt257YXS3Vnw7yJNgLvAtftdozKpmRo83VmqJYi7tucciBnTWJTqhAUxhiTho1iAteX1TyuLhHKH5",
+      "5goDJfkjTVBufC4sWobXfk6KJuAQ6TAr34U9PbTXgnsMCV6qBpwADNXB7fqJmmkTBwk1NpQXq4Y4ZB9R3zMiKhdf",
+      "675x4p3wcdjTu4AfdZCBm4dp2AWkEHiv9r4ircayjn1crX28dZDDEYw9eufHA9AcEahV9CEdGS3bQ289YBfKQ518",
+      "2vtsvyeYKPoEHmwuT6kABf3nfsY3DMVSUC4LNr6JeSQH8s7s6gcG4wMvMaozphRMDzSGKAn6z32d5fcPVkxrYbPz",
+      "3kQo2tLtKRmBi3KwrkC9yDR2g3RWqhabti3N6m2ncYFZfKcpXoagJMDvyXNyrkWnTksYRMSNRAjHaoKeLgPrvvAs",
+      "46a3XWYc6Z99b2C6vbgGfAB1PaFZRyrFUiQFQbztvgFoEMZvXvo6fgi3eiv6zd3JyKQSEMuQN8x2s45XW76mThwu",
+      "2gA7wJCvwVF4kZbuevcTB1rtu9VixmqynEuErgKrh8yfiV4K5F7M6DVrdzdixgja5724HkS6d5povJUEBKcuUDeP",
+      "52bqA5Bnnq5S8b2q58t7kDbD8qtHRXQCmX6FJzkU1re81Mr42jMEqoa4VRH8vouC4BFXegwph4o75iNV3Jqzf1dc",
+      "2GrTsxG5wYiatHgVgixrrW4spZ5okTEMavog3PvV6NnfWYpCbZkt4GaVyYB3YgFhkUe4tF6cqNdrnEfp9VTqW8Au",
+      "2su8QbJSEa7z9EZQYKWhpG5Bx1o9Qwr8tmhcXdesdu1ngfoWf6keB59xvDGjNfrvNHUp33zY7jHXbg2nrZvwbDEP",
+      "spWhVMkR7mqXTYw2p6wWibCevVptuMzMJwDgStirfjodEH5rxoEKEF7D5k32t1ZWa2ErQkVNS5FfzsMzvU7tjU6",
+      "2zoqtBpL1FRQ8LbFu3bd1HvrMHPk3fR6FTiXfUHaScwEqzW1frFqg7nAkS7KXaynadsoa3fw1F9up6bYDZPisGfk",
+      "37P3FqPkhTrhtmQJCiyHAUk45FqnGg9w5KwUKZKywgmAQMJttvzwEUFzQvBUZJUJqCYnane1LiQLNSR5aT7h2ABW",
+      "Ctiq3hxzoZSLFE9fbQSfYu1CN4WJLAQXMwPBEcpMpM3zWxEeEUUyVQ16fPEwLa7kR7cWkt4CbsxWPM3PpKLHgkW"
+    ]
+  },
+  "validation_results": {
+    "bags_fixtures_n": 10,
+    "bags_matched_n": 10,
+    "non_bags_fixtures_n": 20,
+    "non_bags_matched_n": 0,
+    "false_positive_rate": 0,
+    "false_negative_rate": 0,
+    "gate_passed": true,
+    "coverage": {
+      "bags_coverage": 10,
+      "non_bags_coverage": 20
+    }
+  }
+}

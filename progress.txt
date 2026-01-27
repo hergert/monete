@@ -142,3 +142,9 @@ Bags launch = Fee Share V1 + DBC program in same tx
 **Fix**: Created `scripts/collect-non-bags.ts` to fetch Meteora DBC transactions that do NOT include Bags Fee Share V1. The script queries the DBC program and filters out transactions that contain the Bags Fee Share V1 program. Collected 20 non-Bags DBC transactions as fixtures in `data/fixtures/non_bags_dbc/non_bags_01.json` through `non_bags_20.json`.
 **Result**: PASS
 
+## Iteration 7
+**Gate**: signature_artifact
+**Error**: bags_signature_v1.json missing
+**Fix**: Created `scripts/generate-signature-artifact.ts` to build the signature artifact from fixtures and validation results. The script extracts test vectors (transaction signatures) from all Bags and non-Bags fixtures, includes program IDs, rules, account roles, and validation results (0% false positive rate, 100% true positive rate). Generated `bags_signature_v1.json` with schema_version, test_vectors for both should_match (10) and should_not_match (20), and full validation metrics.
+**Result**: PASS (15 gates passing, up from 14)
+
