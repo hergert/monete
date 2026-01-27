@@ -3,11 +3,11 @@
 ## Read (in this order)
 1. `specs/PROJECT_CONTRACT.md` — binding contract / Definition of Done
 2. `IMPLEMENTATION_PLAN.md` — work frontier (pick the next checkbox)
-3. `docs/TODO.md` — context + research + journal
+3. `progress.txt` — what happened in previous iterations
 4. `docs/ISSUES.md` — known bugs / runbook
-5. `progress.txt` + latest `logs/iter_*.verify.txt` — what broke last time
+5. `logs/iter_*.verify.txt` — what broke last time (if present)
 
-Optional: `docs/PLAN.md` only if architecture details are needed.
+Optional: `docs/PLAN.md` for architecture details.
 
 ## Task
 Pick the SINGLE most important unchecked item in `IMPLEMENTATION_PLAN.md` and do it.

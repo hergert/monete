@@ -1,2 +1,70 @@
-# Ralph Progress Log (append-only)
+# Progress Log (append-only)
+
+---
+## Historical Context (pre-Ralph)
+---
+
+### 2026-01-27: Project Kickoff
+
+Created Bags.fm signal aggregation bot plan.
+
+**Key decisions:**
+- Target Bags.fm (not pump.fun) — less competition, uses Meteora DBC
+- Phased approach with gates — no capital until validated
+- EV-based scoring, not win rate
+- Research first, then code
+
+**Key insights:**
+1. Bags uses shared infra (Meteora DBC/DAMM) — program ID alone won't work
+2. Leaderboard wallets are dirty — filter deployers/snipers
+3. "2x in 24h" misleading — need realistic latency simulation
+4. Track exit success rate, not just entries
+5. Quote-based sizing, not liquidity estimates
+
+**Architecture (7 components):**
+A: Ingestion → B: Normalizer → C: Signature decoder → D: Quote service → E: Wallet analytics → F: Strategy → G: Execution
+
+**Stack:** Bun + TypeScript + Postgres (Neon)
+
+---
+
+### 2026-01-27: API Verification + Key Discovery
+
+**Critical discovery — Fee Share V1 is the Bags differentiator:**
+- DBC program = shared Meteora infra, used by many platforms
+- Fee Share V1 (`FEEhPbKVKnco9EXnaY3i4R5rQVUx91wgVfu8qokixywi`) = Bags-specific
+- Fee Share V2 appears unused
+
+**Signature formula:**
+```
+Bags launch = Fee Share V1 + DBC program in same tx
+```
+
+**Token collection strategy:**
+- Cannot use Bags API to list tokens (no endpoint)
+- Must monitor Fee Share V1 program on-chain to discover Bags launches
+
+---
+
+### 2026-01-27: Metrics Decision
+
+**Chose Axiom over Grafana/Prometheus:**
+- No infra to manage, 500GB/month free
+- Circuit breakers stay in-memory (need <10ms)
+- Trade journal in Postgres (backtesting)
+- Metrics/dashboards in Axiom
+
+---
+
+### 2026-01-27: Ralph Harness Setup
+
+- Created E2E Ralph harness with component specs
+- Consolidated docs: single source of truth for contract and plan
+- Removed deprecated files
+
+---
+## Ralph Iterations
+---
+
+<!-- Agent appends iteration notes below -->
 
