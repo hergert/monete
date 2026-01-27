@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Verification-driven development loop
-# Each iteration: run verify → agent fixes first failure → verify again
+# Goal-driven development loop
+# Each iteration: run verify → agent reads context and picks most important task → verify again
 
 MAX_ITERS="${MAX_ITERS:-60}"
 SLEEP_SEC="${SLEEP_SEC:-1}"
@@ -41,16 +41,14 @@ for i in $(seq 1 "$MAX_ITERS"); do
     exit 0
   fi
 
-  # Show what needs fixing
+  # Show status for human (agent decides for itself)
   if [[ -f "$REPORT_FILE" ]]; then
-    first_failure=$(grep -o '"first_failure": "[^"]*"' "$REPORT_FILE" | cut -d'"' -f4)
-    if [[ -n "$first_failure" && "$first_failure" != "null" ]]; then
-      echo ""
-      echo "📍 Agent will work on: $first_failure"
-    fi
+    failed_count=$(grep -o '"failed": [0-9]*' "$REPORT_FILE" | cut -d' ' -f2)
+    echo ""
+    echo "📊 Status: $failed_count gates failing"
   fi
 
-  # Run agent - it reads verify_status.json and fixes first failure
+  # Run agent - it reads PLAN.md, TODO.md, verify_status.json and decides what's most important
   echo ""
   echo "▶ Running agent..."
   claude -p "$(cat "$PROMPT_FILE")" \

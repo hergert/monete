@@ -1,79 +1,67 @@
 # Agent Instructions
 
-You are working on Monenete - a Bags.fm signal aggregation bot.
+You are an engineer working on Monenete - a Bags.fm signal aggregation bot.
 
-## First: Understand the Goal
+## Your Mission
 
-Read `docs/PLAN.md` to understand what we're building and WHY.
+**Read `docs/PLAN.md` first.** Understand what we're building:
+- Detect Bags launches on Solana
+- Score wallets by their trading edge
+- Paper trade to validate the strategy
+- Only go live if it actually works
 
-**The real goal**: Detect Bags launches → Score wallets → Paper trade → Validate the strategy works.
+This isn't about checking boxes. It's about building something that works.
 
-Everything else is in service of this goal.
+## Think Before Acting
 
-## Second: Pick the Most Important Task
+Look at:
+- `docs/PLAN.md` — the architecture and WHY behind decisions
+- `TODO.md` — available tasks (but don't just pick the first one!)
+- `reports/verify_status.json` — what gates are passing/failing
+- `progress.txt` — what previous iterations accomplished
 
-Read `TODO.md` and `reports/verify_status.json`.
+**Ask yourself:**
+1. What's the critical path to a working system?
+2. What's actually blocking progress right now?
+3. Is there a failing gate that's MORE important than the first one listed?
 
-**Don't just pick the first unchecked item.** Think:
-1. What UNBLOCKS the most progress toward the goal?
-2. What's on the critical path to signature validation → e2e → final validation?
-3. What dependencies must be resolved first?
+For example: if `signature_validation` is failing, that's more important than collecting extra fixtures - because signature detection is the CORE of the system.
 
-**Priority order** (roughly):
-1. Anything blocking signature detection (core fixtures, signature code)
-2. Anything blocking e2e replay (migrations, replay data)
-3. Supporting infrastructure (other fixtures, reports)
-4. Nice-to-haves (documentation, cleanup)
+## Do Real Work
 
-## Third: Do the Work
+Don't just edit files and hope it works. Actually:
+1. Understand the problem
+2. Fix it properly (root cause, not symptoms)
+3. **Run the verification** to prove it works
+4. Only then mark it done
 
-- Fix the **root cause**, not symptoms
-- Make **minimal changes** - don't over-engineer
-- **No pipes in bash** - run simple commands, no `|` or `2>&1`
+**No pipes in bash** - run simple commands, no `|` or `2>&1`
 
-## Fourth: Critically Verify It's Done
+## Be Honest
 
-**Don't just assume it worked.** Actually verify:
-- Run the specific command/test that proves it works
-- Check the output shows success
-- If it's a gate in verify_status.json, run `./scripts/verify_report.sh` and confirm the gate now passes
+- If a task isn't fully done, don't check it off
+- If you're blocked (need API key, real data, unclear spec), say so
+- If something needs human input, append `<promise>NEED_HUMAN</promise>` to progress.txt
 
-**A task is NOT done if:**
-- The test still fails
-- The verification shows errors
-- You only edited code but didn't run it
+## After Success
 
-## Fifth: Update TODO.md
+Update `TODO.md` checkbox: `- [ ]` → `- [x]`
 
-Only after VERIFIED success:
-- Check off the completed item: `- [ ]` → `- [x]`
-- Be honest - if it's partial, don't check it off
-
-## Sixth: Journal and Commit
-
-Append to `progress.txt`:
+Journal to `progress.txt`:
 ```
 ## Iteration N
-**Task**: <what you picked and why>
+**Task**: <what you picked and WHY it was most important>
 **Actions**: <what you did>
-**Verification**: <command run + result>
+**Verification**: <command + result>
 **Result**: PASS | STILL_FAILING | NEED_HUMAN
 ```
 
-If the task passes, commit:
+Commit:
 ```bash
-git add <files you changed>
+git add <files>
 git commit -m "fix(<area>): <what you fixed>"
 ```
 
-## Signals
+## Remember
 
-- **Blocked** (need API key, real data, unclear spec): append `<promise>NEED_HUMAN</promise>` to progress.txt
-- **Stuck** (tried 3 times, still failing): append `<promise>NEED_HUMAN</promise>` with explanation
-
-## Context Files
-
-- `docs/PLAN.md` — the WHY (architecture, goals, success criteria)
-- `TODO.md` — the WHAT (tasks, checkboxes, phases)
-- `reports/verify_status.json` — current gate status
-- `progress.txt` — history of what's been done
+The goal isn't to check boxes. The goal is to build a working signal bot. Every task should move us closer to that.
