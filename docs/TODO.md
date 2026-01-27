@@ -2,17 +2,26 @@
 
 ## Current Focus
 
-Phase 0A prep — validate Bags signature before writing any code.
+**Research phase** — collect data and understand Bags before writing code.
 
 ## Backlog
 
-### Phase 0A: Signature Validation
-- [ ] Set up Helius account
-- [ ] Collect 20+ Bags token addresses from UI
-- [ ] Query creation txs, extract program IDs + accounts
-- [ ] Identify Bags-specific account constraints
-- [ ] Build false positive test set (non-Bags DBC launches)
-- [ ] Document final signature spec
+### Research (Before Code)
+- [ ] Set up Helius account, get API key
+- [ ] Collect 20+ Bags token addresses from bags.fm UI
+- [ ] Find Bags SDK GitHub repo
+- [ ] Document Bags program IDs (DBC, DAMM, Fee Share)
+- [ ] Query 3-5 sample creation txs via Helius
+- [ ] Analyze tx structure, identify Bags-specific accounts
+- [ ] Collect 5-10 non-Bags DBC launches (false positive set)
+- [ ] Write `data/signature_research.md` with findings
+
+### Phase 0A: Signature Validation (After Research)
+- [ ] Project scaffolding (Bun + TypeScript)
+- [ ] Helius client wrapper
+- [ ] Instruction decoder using Bags IDLs
+- [ ] Produce `bags_signature_v1.json`
+- [ ] Validate <5% false positive rate
 
 ### Phase 0B: Wallet Database
 - [ ] Research Birdeye API access/pricing
@@ -23,7 +32,7 @@ Phase 0A prep — validate Bags signature before writing any code.
 ### Infrastructure (7 Components)
 - [ ] A: Ingestion layer (WSS + webhook fallback)
 - [ ] B: Event normalizer + dedupe
-- [ ] C: Signature decoder → `bags_signature_v1.json`
+- [ ] C: Signature decoder
 - [ ] D: Quote service (Jupiter)
 - [ ] E: Wallet analytics
 - [ ] F: Strategy engine

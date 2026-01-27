@@ -28,6 +28,8 @@ Thumbs.db
 logs/
 
 # Data (may contain sensitive wallet info)
-data/
+data/*
+!data/.gitkeep
+!data/*.md
 *.db
 *.sqlite
