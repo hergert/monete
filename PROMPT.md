@@ -7,6 +7,7 @@ study reports/verify_status.json to see what gates are passing/failing - but don
 study progress.txt to see what previous iterations accomplished.
 
 IMPORTANT:
+- all work stays inside this repository - never modify files outside this project
 - update TODO.md when the task is done (check off the box)
 - update progress.txt with what you did and the result
 - you may implement missing functionality if required (but study the existing code first)
