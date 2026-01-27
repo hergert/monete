@@ -10,227 +10,341 @@ Deploy an on-chain signal aggregation bot that monitors Bags.fm token launches v
 1. **Signal Replicability**: Can we enter/exit close enough to wallet events to capture edge after latency + slippage?
 2. **Wallet List Integrity**: Can we build a wallet set that stays predictive out-of-sample?
 
-## Key Components
+---
 
-### 1. Bags Signature Validation
+## Architecture: 7 Components
 
-Bags uses **shared infrastructure** (Meteora DBC for bonding curves, Meteora DAMM v2 for post-migration AMM). Program ID alone creates false positives.
+### A. Ingestion Layer
+Real-time tx stream from Helius.
 
-**Multi-factor signature:**
-- Meteora DBC program ID (published: `dbcij3...`)
+**Primary** (low-latency): Enhanced WebSockets `transactionSubscribe`
+- `accountInclude` for DBC program (OR filter)
+- `accountRequired` for Bags-specific accounts (AND filter)
+- Subscribe at `processed` for speed, confirm at `confirmed` for truth
+
+**Fallback** (reliability/cost):
+- Helius webhooks (with idempotency—duplicates happen)
+- Periodic backfill job (poll recent signatures)
+
+**Note**: Enhanced WebSockets require Business/Professional plan. Design for fallback.
+
+### B. Event Normalizer + Dedupe
+Raw tx → canonical event stream.
+
+**Canonical key**: `(signature, instruction_index)`
+
+**Dedupe rule**: Ignore if key exists. Critical for accurate wallet stats.
+
+### C. Signature Decoder
+Answer: "Is this a Bags launch?"
+
+**Multi-factor signature**:
+- Meteora DBC program ID
 - Instruction: `initialize_virtual_pool_with_spl_token`
-- Bags-specific account constraints (identify from tx analysis)
-- Fee Share V2 program linkage
-- Metadata URI corroboration (weak, spoofable)
+- Bags-specific account constraints (the real differentiator)
+- Fee Share config linkage (strong filter—required for Bags launches)
 
-**Validation**: Test against false positive set of non-Bags DBC launches.
-
-### 2. Wallet Database with Quality Filtering
-
-Raw leaderboards are dirty inputs (include deployers, sniper bots, wash traders).
-
-**Filtering criteria:**
-- Exclude: wallets that frequently create tokens (deployer behavior)
-- Exclude: wallets that buy within first 5 seconds across many launches (sniper bots)
-- Keep: wallets whose edge is **selection** (buy minutes/hours after launch, still profit)
-
-**Sources** (treat as seeds, then discover from actual trading):
-- Birdeye API (requires API key, check quota)
-- pump.fun historical data
-- Manual extraction from social calls
-
-### 3. Helius Enhanced WebSockets
-
-`TOKEN_MINT` webhook type doesn't reliably catch DBC launches.
-
-**Correct approach:**
-- Use `transactionSubscribe` with `accountInclude` filter for Meteora DBC program
-- Add `accountRequired` for Bags-specific accounts
-- Decode instructions locally using Bags SDK IDLs
-- Handle duplicate events (Helius warns about retries)
-
-### 4. Quote-Based Position Sizing
-
-DBC bonding curves ≠ AMM TVL. Can't estimate slippage from "pool liquidity."
-
-**Sizing logic:**
+**Deliverable**: `bags_signature_v1.json`
+```json
+{
+  "version": "1",
+  "program_ids": ["..."],
+  "instruction_discriminators": ["..."],
+  "required_account_positions": {...},
+  "test_vectors": {
+    "should_match": ["sig1", "sig2"],
+    "should_not_match": ["sig3", "sig4"]
+  }
+}
 ```
-quote = get_swap_quote(intended_size)
-if quote.price_impact > 2%:
-    size_down or skip
 
-# With $500 capital: 2% = $10
-position = min(quote_approved_size, 2% of capital)
+### D. Market Data + Quote Service
+Truth for slippage/impact.
 
-# Minimum trade constraint (to avoid noise-dominated results)
+**Interface**:
+```
+get_quote(token, in_amount, slippage_bps) → {
+  expected_out,
+  price_impact_bps,
+  route,
+  min_out
+}
+```
+
+**Store all quotes** — becomes historical simulation dataset.
+
+**Skip signal**: If token not routable, no reliable execution path.
+
+### E. Wallet Analytics
+Produce list of wallets with replicable edge.
+
+**Features to compute per wallet**:
+- `is_deployer_like`: count of token creations
+- `is_sniper_like`: % of buys within 5s of launch
+- `holding_half_life`: median time to first sell
+- `trade_frequency`: signals/day
+
+**Output**:
+- `ev_per_signal` (realistic latency + quotes + exits)
+- `ev_lower_bound` (confidence bound)
+- `signals_n`
+- `status` (eligible / excluded)
+
+### F. Strategy Engine
+Convergence → decision.
+
+**Scoring** (deterministic, backtestable):
+```
+convergence_score = sum(wallet_weight for wallets buying within window)
+wallet_weight = clamp(ev_lower_bound, 0, cap)
+```
+
+**Entry requires all**:
+- `score ≥ threshold`
+- Toxicity filter pass
+- Quote impact ≤ 2%
+- `position ≥ $10`
+
+### G. Execution + Position Manager
+
+**Entry**: Jupiter swap
+
+**Exit options**:
+1. Jupiter Trigger/Limit v2 for TP/SL (OCO behavior—one triggers, other cancels)
+   - Reduces "bot must be online 24/7" risk
+2. Self-managed (poll quotes + fire swaps)
+   - Better for trailing stops
+   - More infra complexity
+
+**Hybrid approach**: Trigger/Limit for hard SL + initial TP, self-managed for trailing.
+
+**Circuit breakers**:
+- Per-token: sell fails twice → mark toxic
+- Global: 5 sell failures in 10 min → disable new entries
+
+---
+
+## Data Model
+
+### Tables
+
+**raw_events**
+- `id`, `source`, `signature`, `slot`, `instruction_index`
+- `received_at`, `payload_json`
+
+**launches**
+- `mint`, `launch_signature`, `launch_slot`, `detected_at`
+- `is_bags`, `signature_version`
+- `dbc_pool_address`, `pool_authority`, `fee_share_config`
+- `is_migrated`
+
+**wallet_actions**
+- `wallet`, `mint`, `action`, `slot`, `ts_chain`
+- `amount_in`, `amount_out`, `tx_signature`
+
+**quotes**
+- `mint`, `ts`, `in_amount_usd`, `price_impact_bps`
+- `expected_out`, `route_json`
+
+**positions**
+- `position_id`, `mint`
+- `entry_ts`, `entry_sig`, `entry_price`, `size_usd`
+- `exit_ts`, `exit_sig`, `exit_price`
+- `pnl_usd`, `pnl_pct`, `exit_reason`
+
+**wallet_scores**
+- `wallet`, `window_start`, `window_end`
+- `signals_n`, `ev_mean`, `ev_lower_bound`
+- `sniper_score`, `deployer_score`, `status`
+
+---
+
+## Position Sizing (Fixed)
+
+**Bug in previous version**: `max($10, min(...))` forces trades even when quote says skip.
+
+**Correct logic**:
+```
+position = min(quote_approved_size, 0.02 * capital)
 if position < $10:
-    skip (not worth execution costs)
+    skip  # Not worth execution costs
 ```
 
-### 5. Toxicity / Rug Risk Filter (Pre-Entry)
+This keeps the impact gate consistent.
 
-Fast checks before any entry:
-- Mint authority status (must be revoked or null)
-- Freeze authority status (must be revoked or null)
-- Token concentration (skip if top holder >50%)
-- Dev wallet behavior (skip if dev sold >20%)
-- LP status (skip if LP unlocked or recently withdrawn)
+---
 
-### 6. Execution Safety
+## Toxicity Filter (Fixed)
 
-**Toxic token handling:**
-- If sell fails twice → mark token as toxic, stop attempting
-- Prevents death spirals of retry fees + priority fee wars
+**Bug in previous version**: "Top holder >50%" false-positives on DBC pool authority.
 
-**Time-based exit overlay:**
-- If not +20% within 30 minutes → exit regardless
-- Avoids getting trapped in slow rugs
+**Correct logic**:
+1. Identify protocol accounts from DBC init (pool authority, vault accounts)
+2. Exclude protocol accounts from holder math
+3. Check: `largest_non_protocol_holder < 50%`
 
-**Exit failure tracking:**
-- Track "% of trades where exit succeeded within 60 seconds"
-- This matters more than win rate
+**Pre-migration vs Post-migration**:
+- Pre-migration: Check curve/pool state integrity (no "LP unlock" concept)
+- Post-migration (DAMM v2): Evaluate pool + LP ownership/lock
 
-### 7. Realistic P&L Simulation
+**Full toxicity checks**:
+- Mint authority revoked or null
+- Freeze authority revoked or null
+- Non-protocol concentration <50%
+- Dev wallet hasn't sold >20%
+- No sudden LP withdrawals / migration events
 
-**Entry timing:**
-```
-entry_time = wallet_buy_time + detection_latency + tx_landing_time
-```
+---
 
-**Fill price:** Simulated quote at entry_time (not wallet's price)
+## Infrastructure
 
-**Costs included:**
-- Base transaction fee
-- Priority fee (use observed median from similar txs)
-- Quote slippage
+### V1 Production Stack
+- 1 VPS (2-4GB RAM)
+- Docker Compose
+- Postgres (not SQLite—need concurrency, indexing, analytics)
+- Redis (optional queue/cache)
+- Grafana/Prometheus (metrics)
 
-**Exit rules:** 50% at 2x, trailing stop, time stop, hard stop
+### Services
+- `ingestor` — WSS client
+- `processor` — decode + scoring
+- `executor` — trades + exits
+- `db` — Postgres
+- `metrics` — Grafana stack
 
-**Scoring:** Expected value per signal with confidence bounds
+### Operational Requirements
+- Ping every 60s (Helius 10-min inactivity timer)
+- Reconnect with backoff
+- Backfill recent slots on reconnect (cover gaps)
+- Idempotency everywhere (webhooks duplicate, reconnects replay)
+
+### Two Clocks
+Always store both:
+- `slot` + `blockTime` (chain time)
+- `received_at` (system time)
+
+Latency KPIs require both.
+
+### Cost Considerations
+- Enhanced WebSockets metered on newer plans
+- Keep filters tight (`accountRequired` as soon as Bags constraints known)
+- Track streaming volume as cost driver
+
+---
 
 ## How It Works
 
 ### Phase 0A: Signature Validation (Days 1-3)
 
+**Build output**: `bags_signature_v1.json`
+
 1. Use published Bags program IDs (DBC, DAMM, Fee Share) as starting point
 2. Collect 20+ token mint addresses from Bags.fm UI
-3. For each token: query Helius for creation tx, decode using Bags SDK IDLs
-4. Identify Bags-specific account positions in DBC init instruction
-5. Validate signature against 50+ historical Bags tokens
-6. **Build false positive test set**: Collect 20+ non-Bags Meteora DBC launches
-7. **Differentiation test**: Confirm <5% false positive rate
-8. Document exact signature specification
-9. **Gate**: If false positive rate >5%, refine constraints or pause
+3. For each token: query Helius for creation tx
+4. Decode using Bags SDK IDLs
+5. Identify Bags-specific account positions in DBC init
+6. Note Fee Share config linkage pattern
+7. Validate against 50+ historical Bags tokens
+8. **Build false positive test set**: 20+ non-Bags Meteora DBC launches
+9. **Gate**: <5% false positive rate
 
 ### Phase 0B: Wallet Database + Baseline (Days 4-14)
 
-1. Source 60 candidate wallets from Birdeye API / pump.fun / social
-2. **Filter out non-replicable edge:**
-   - Query each wallet's token creation history → exclude frequent deployers
-   - Analyze timing of buys → exclude consistent first-5-second buyers
-3. Deploy Helius WebSocket with validated Bags signature
-4. **Establish baseline**: Track ALL Bags launches, measure:
-   - What % hit 2x within 24h? (null hypothesis)
-   - What % are rugs/honeypots? (toxicity rate)
-5. Run passive observation: log tracked wallet interactions
-6. **Discover new wallets**: Add wallets seen trading profitably on Bags tokens
-7. After 10 days: calculate per-wallet metrics using **realistic simulation**:
-   - Entry = wallet buy + 30s detection + 10s tx landing (40s latency)
-   - Fill = price at entry time + estimated slippage
-   - Exit = apply actual exit rules
-   - Metric = EV per signal with Wilson confidence interval
-8. **Quality threshold**:
-   - Need ≥15 wallets with positive EV (lower confidence bound > 0)
-   - Each wallet needs ≥20 signals for validity
-   - Wallet edge must exceed baseline by >10%
-9. If not met: extend 7 more days. If still not met by Day 21: pivot to pump.fun
+**Build output**: Wallet edge report
 
-### Phase 1: Paper Trading with Full Simulation (Days 15-28)
+1. Source 60 candidate wallets (Birdeye / pump.fun / social)
+2. Compute wallet features: `is_deployer_like`, `is_sniper_like`, etc.
+3. Deploy Helius WebSocket with validated signature
+4. **Establish baseline**:
+   - What % of Bags launches hit 2x? (null hypothesis)
+   - What % are rugs? (toxicity rate)
+5. Run passive observation: log wallet actions
+6. Discover new wallets from profitable trading
+7. After 10 days: calculate per-wallet EV with realistic simulation
+8. **Gate**: ≥15 wallets with EV lower bound >0, each with ≥20 signals
 
-1. On each new Bags token:
-   - Run toxicity filter (mint/freeze authority, concentration, dev wallet)
-   - Log price at T+0, T+40s (simulated entry), T+5min, T+30min, T+1hr, T+24hr
-   - Get swap quote for intended position size
-2. Simulate entries:
-   - Apply tiered system + quote-based sizing
-   - Include priority fee estimates
-   - Apply time-based exit overlay
-3. Track hypothetical P&L with **realistic fills and exits**
-4. **Success gate**:
-   - Positive EV after all simulated costs
-   - Sharpe ratio >1.0
-   - Sample size ≥50 simulated trades
-   - Exit success rate >80% (could exit within 60s when needed)
+### Phase 1: Paper Trading (Days 15-28)
+
+**Build output**: Paper trading report + go/no-go decision
+
+1. On each Bags launch:
+   - Run toxicity filter
+   - Log prices at T+0, T+40s, T+5m, T+30m, T+1h, T+24h
+   - Get and store swap quotes
+2. Simulate entries with realistic fills
+3. Simulate exits with actual rules
+4. **Gate**:
+   - Positive EV after costs
+   - Sharpe >1.0
+   - ≥50 simulated trades
+   - Exit success rate >80%
 
 ### Phase 2: Micro-Capital Live (Day 29+)
 
-1. Initial capital: $500
-2. Position sizing: max($10, min(quote_approved, 2% capital))
-3. Pre-entry checks:
-   - Wallet tier threshold (≥1 quality wallet)
-   - Quote price impact <2%
-   - Toxicity filter passes
-4. Exit strategy:
-   - 50% at 2x
-   - Remainder: 30% trailing stop from peak
-   - Time stop: exit if not +20% within 30 min
-   - Hard stop: -50% per position
-5. **Toxic token rule**: If sell fails twice → mark toxic, stop attempts
-6. **Weekly review**: If EV negative for 2 weeks, halt and return to observation
+**Build output**: Live safety + weekly reports
+
+1. Capital: $500
+2. Position sizing: `min(quote_approved, 2% capital)`, skip if <$10
+3. Pre-entry: wallet signal + quote impact + toxicity
+4. Exits via Jupiter Trigger/Limit v2 + self-managed trailing
+5. Circuit breakers active
+6. **Weekly review**: EV negative 2 weeks → halt
 
 ### Adaptation Loop
 
-- Weekly: recalculate wallet EV, demote negative-EV wallets, add new candidates
-- Monthly: if portfolio ROI <0%, reduce position sizes 50% and tighten criteria
-- Quarterly: re-validate Bags signature (platform may change infra)
+- Weekly: recalculate wallet EV, demote/promote
+- Monthly: if ROI <0%, reduce size 50%
+- Quarterly: re-validate Bags signature
 
-## KPIs to Track
+---
 
-**Latency metrics:**
-- Median time: launch → our detection
-- Median time: signal → our buy lands
-- P95 detection latency (worst case matters)
+## KPIs
 
-**Execution metrics:**
-- % exits that succeed within 60 seconds
-- Realized slippage vs expected slippage
-- Priority fee spend per trade
+**Latency**:
+- Median launch → detection
+- Median signal → buy lands
+- P95 detection latency
 
-**Performance metrics:**
-- EV per trade and per day
-- Win rate (secondary to EV)
-- Maximum adverse excursion (MAE) distribution
+**Execution**:
+- % exits succeed within 60s
+- Realized vs expected slippage
+- Priority fee spend
+
+**Performance**:
+- EV per trade/day
+- Win rate (secondary)
+- MAE distribution
 - % of -50% stops hit
-- Sharpe ratio (rolling 2-week)
+- Sharpe (rolling 2-week)
 
-**Quality metrics:**
-- Wallet signal decay (are wallets staying predictive?)
-- Baseline drift (is overall Bags launch quality changing?)
-- Toxicity filter hit rate (how many skipped?)
+**Quality**:
+- Wallet signal decay
+- Baseline drift
+- Toxicity filter hit rate
+
+**Operational defense** (active, not just monitoring):
+- Exit success drops → disable new entries
+- Slippage spikes → tighten max impact
+- Sell failures → auto-raise priority fee (bounded) or stop
+
+---
 
 ## Risk Mitigations
 
-### MEV / Sandwiching / Priority Fee Wars
-Popular launches attract sandwich attacks and copy-trading bots. Mitigations:
-- Toxic token rule prevents death spirals
-- Time-based exits prevent slow-rug traps
-- Quote-based sizing adapts to volatile moments
-- Track realized vs expected slippage to detect MEV drain
+### Enhanced WebSockets Cost
+Not free-tier. Design fallback ingestion (webhooks + backfill). Track streaming volume.
 
-### Bags Uses Shared Infrastructure
-Signature uses multi-factor validation with explicit false positive testing against non-Bags DBC launches.
+### DBC Pool Authority as Top Holder
+Exclude protocol accounts from concentration math. Identify from DBC init.
 
-### Leaderboard Wallets Include Deployers/Bots
-Explicit filtering: exclude frequent token creators and first-second buyers. Supplement with wallets discovered from actual profitable trading.
+### Pre-Migration vs Post-Migration
+Different mechanics. Pre-migration has no "LP unlock." Check curve state integrity.
 
-### Win Rate Doesn't Reflect Execution Reality
-Replaced with EV simulation including latency, priority fees, and realistic exit rules. Confidence bounds prevent promoting lucky wallets.
+### MEV / Sandwiching
+Circuit breakers, time-based exits, quote-based sizing, slippage tracking.
 
-### Sample Size Too Small
-Require ≥20 signals per wallet, ≥50 paper trades before live. Compare against baseline to ensure edge is real.
+### Leaderboard Wallet Quality
+Feature-based filtering. Exclude deployers/snipers. Discover wallets from actual trading.
 
-### Can't Exit Scenarios
-Track exit success rate as core KPI. Time-based exits prevent getting trapped. Toxic token marking prevents retry death spirals.
-
-### Birdeye API Costs
-Treat as seed source only. Discover wallets organically from observed trading. Fallback to pump.fun or manual sourcing.
+### Idempotency
+Webhooks duplicate. Reconnects replay. Canonical key dedupe everywhere.

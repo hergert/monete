@@ -20,17 +20,27 @@ Phase 0A prep — validate Bags signature before writing any code.
 - [ ] Build baseline measurement system
 - [ ] Set up Helius WebSocket subscription
 
-### Infrastructure
-- [ ] Project scaffolding (TypeScript, deps)
-- [ ] Helius client wrapper
-- [ ] Instruction decoder using Bags IDLs
-- [ ] Toxicity filter module
+### Infrastructure (7 Components)
+- [ ] A: Ingestion layer (WSS + webhook fallback)
+- [ ] B: Event normalizer + dedupe
+- [ ] C: Signature decoder → `bags_signature_v1.json`
+- [ ] D: Quote service (Jupiter)
+- [ ] E: Wallet analytics
+- [ ] F: Strategy engine
+- [ ] G: Execution + position manager
+
+### Infra Setup
+- [ ] VPS provisioning (2-4GB)
+- [ ] Docker Compose setup
+- [ ] Postgres + schema
+- [ ] Grafana/Prometheus
 
 ## Done
 
 - [x] Initial plan created (2024-01-27)
 - [x] Plan reviewed, execution reality concerns added (2024-01-27)
 - [x] Setup checklist created (2024-01-27)
+- [x] Execution-grade architecture review (2024-01-27)
 
 ---
 
@@ -67,6 +77,52 @@ Created initial plan for Bags.fm signal aggregation bot. Went through detailed r
 1. Set up Helius account
 2. Start collecting Bags token addresses
 3. Begin signature analysis
+
+---
+
+## 2024-01-27 (cont.)
+
+**Session: Execution-Grade Architecture Review**
+
+Deep review of plan with focus on practical execution. Major restructure.
+
+**5 Bugs Fixed:**
+
+1. **Position sizing**: `max($10, min(...))` forced trades when quote said skip. Fixed to skip if <$10.
+
+2. **Toxicity filter**: "Top holder >50%" false-positives on DBC pool authority. Fixed to exclude protocol accounts from holder math.
+
+3. **LP unlock**: Not a concept on pre-migration DBC. Now distinguish pre/post migration checks.
+
+4. **Enhanced WebSockets**: Not free-tier. Added fallback ingestion path (webhooks + backfill).
+
+5. **TOKEN_MINT**: Already knew this was wrong. Confirmed: use `transactionSubscribe`.
+
+**Architecture Defined (7 Components):**
+- A: Ingestion (WSS primary, webhook/backfill fallback)
+- B: Event normalizer + dedupe (canonical key: sig + instruction_index)
+- C: Signature decoder → `bags_signature_v1.json`
+- D: Quote service (Jupiter, store all quotes for sim)
+- E: Wallet analytics (features + EV scoring)
+- F: Strategy engine (deterministic scoring, backtestable)
+- G: Execution (Jupiter Trigger/Limit v2 for TP/SL + self-managed trailing)
+
+**Data Model:**
+6 tables defined: raw_events, launches, wallet_actions, quotes, positions, wallet_scores
+
+**Infrastructure:**
+- VPS 2-4GB, Docker Compose, Postgres, Redis, Grafana
+- Two clocks (chain time + system time)
+- Idempotency everywhere
+- Ping every 60s (Helius timeout)
+
+**Key Insight:**
+> Treat exits as a product feature, not just a rule. If exit success drops → disable entries. Active defense, not passive monitoring.
+
+**Next:**
+1. Set up accounts (Helius, wallet)
+2. Build Phase 0A: signature validation
+3. Produce `bags_signature_v1.json` artifact
 
 ---
 
