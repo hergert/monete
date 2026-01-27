@@ -135,4 +135,49 @@ Deep review of plan with focus on practical execution. Major restructure.
 
 ---
 
+## 2024-01-27 (cont.)
+
+**Session: Prerequisites & Research-First Approach**
+
+Discussed what we need before writing any code.
+
+**Technical Decisions:**
+- Runtime: **Bun** (faster, native TS)
+- Language: TypeScript
+- Database: Postgres
+- Approach: **Research first, then code**
+
+**Prerequisites Identified:**
+
+Before code:
+1. Helius account + API key
+2. 20+ Bags token addresses (manual collection)
+3. Bags SDK repo + program IDs
+4. Sample tx analysis (understand structure visually)
+5. False positive set (non-Bags DBC launches)
+6. Document findings in `data/signature_research.md`
+
+**Data structure created:**
+```
+data/
+├── bags_tokens.json       (ignored - sensitive)
+├── bags_programs.json     (ignored)
+├── non_bags_dbc.json      (ignored)
+├── signature_research.md  (tracked - findings)
+└── sample_txs/            (ignored)
+```
+
+**Why research first:**
+- Understand the problem before solving it
+- Avoid building wrong abstractions
+- Manual tx inspection reveals patterns faster than guessing in code
+
+**Next:**
+1. Create Helius account at helius.dev
+2. Collect token addresses from bags.fm
+3. Find Bags SDK GitHub repo
+4. Query sample transactions, analyze structure
+
+---
+
 <!-- APPEND NEW ENTRIES ABOVE THIS LINE -->
