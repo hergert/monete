@@ -136,3 +136,9 @@ Bags launch = Fee Share V1 + DBC program in same tx
 **Fix**: Added null checks for array element access: wrapped `signatures[signatures.length - 1]` in a conditional, and added a guard + type assertion for `collected[i]` in the save loop.
 **Result**: PASS
 
+## Iteration 6
+**Gate**: fixtures_non_bags_count
+**Error**: have 0, need 20
+**Fix**: Created `scripts/collect-non-bags.ts` to fetch Meteora DBC transactions that do NOT include Bags Fee Share V1. The script queries the DBC program and filters out transactions that contain the Bags Fee Share V1 program. Collected 20 non-Bags DBC transactions as fixtures in `data/fixtures/non_bags_dbc/non_bags_01.json` through `non_bags_20.json`.
+**Result**: PASS
+
