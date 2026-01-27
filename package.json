@@ -1,0 +1,23 @@
+{
+  "name": "monenete",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "lint": "echo 'lint: not implemented yet' && exit 0",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "validate:signature": "bun run src/validate-signature.ts",
+    "sig:check": "bun run src/sig-check.ts",
+    "e2e:replay": "bun run src/e2e-replay.ts",
+    "ingest:replay": "bun run src/ingest-replay.ts",
+    "db:migrate": "bun run src/db/migrate.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

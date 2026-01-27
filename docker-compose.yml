@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: monenete
+      POSTGRES_PASSWORD: monenete
+      POSTGRES_DB: monenete
+    ports:
+      - "5432:5432"
+    volumes:
+      - monenete_pg:/var/lib/postgresql/data
+
+volumes:
+  monenete_pg:
