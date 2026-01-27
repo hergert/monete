@@ -12,9 +12,13 @@
 - [x] Set up Helius account, get API key
 - [x] Set up Postgres database (Neon)
 - [x] Create justfile with dev commands
-- [ ] Collect 20+ Bags token addresses from bags.fm UI
-- [ ] Find Bags SDK GitHub repo
-- [ ] Document Bags program IDs (DBC, DAMM, Fee Share)
+- [x] Document Bags program IDs (DBC, DAMM, Fee Share) — in PLAN.md
+- [x] Find Bags SDK GitHub repo — bagsfm/bags-sdk, IDLs published there
+- [x] Find Bags TypeScript SDK — @bagsfm/bags-sdk on npm
+- [ ] Decide ingestion Mode A vs Mode B for Phase 0A (cost vs latency)
+- [ ] Write Economics Gate spreadsheet (infra cost vs expected monthly EV)
+- [ ] Get Bags API key from dev.bags.fm, confirm base URL works
+- [ ] Collect 20+ Bags token addresses (use Bags API, faster than UI scraping)
 - [ ] Query 3-5 sample creation txs via Helius
 - [ ] Analyze tx structure, identify Bags-specific accounts
 - [ ] Collect 5-10 non-Bags DBC launches (false positive set)
@@ -54,14 +58,18 @@
 
 ## Done
 
-- [x] Initial plan created (2024-01-27)
-- [x] Plan reviewed, execution reality added (2024-01-27)
-- [x] Architecture defined: 7 components (2024-01-27)
-- [x] Technical decisions: Bun, TypeScript, research-first (2024-01-27)
-- [x] Helius account created + tested (2024-01-27)
-- [x] Neon Postgres connected + tested (2024-01-27)
-- [x] Justfile created (2024-01-27)
-- [x] Docs consolidated: PLAN.md + TODO.md (2024-01-27)
+- [x] Initial plan created (2026-01-27)
+- [x] Plan reviewed, execution reality added (2026-01-27)
+- [x] Architecture defined: 7 components (2026-01-27)
+- [x] Technical decisions: Bun, TypeScript, research-first (2026-01-27)
+- [x] Helius account created + tested (2026-01-27)
+- [x] Neon Postgres connected + tested (2026-01-27)
+- [x] Justfile created (2026-01-27)
+- [x] Docs consolidated: PLAN.md + TODO.md (2026-01-27)
+- [x] Comprehensive plan review + spec upgrades (2026-01-27)
+- [x] Economics gate, latency budget, trade journal added (2026-01-27)
+- [x] Technical decisions locked: Mode A, wallet subscribe, Token-2022 skip (2026-01-27)
+- [x] Bags resources documented: API, SDK, program IDs (2026-01-27)
 
 ---
 
@@ -71,7 +79,7 @@ _Append new entries at bottom._
 
 ---
 
-## 2024-01-27: Project Kickoff
+## 2026-01-27: Project Kickoff
 
 Created Bags.fm signal aggregation bot plan. Extensive review process.
 
@@ -114,6 +122,42 @@ A: Ingestion → B: Normalizer → C: Signature decoder → D: Quote service →
 1. Collect token addresses from bags.fm
 2. Find Bags SDK repo
 3. Query sample transactions, analyze structure
+
+---
+
+## 2026-01-27: Plan Review + Spec Upgrades
+
+Comprehensive review applied. Key additions:
+
+**Economics as first-class gate:**
+- Success = positive NET EV (after fees, tips, infra)
+- Infra upgrade requires 2× monthly cost in projected EV
+- Fee-aware position sizing: `total_cost <= 1% of position`
+
+**Latency budget:**
+- `t_detect` <= 2s median OR `slot_gap` <= 2 slots
+- `t_exec` <= 15s (fast) or 40s (cheap)
+- Kill criterion if EV negative + latency above budget
+
+**Technical decisions locked:**
+- Mode A (cheap) for Phase 0A/0B/1 — don't pay for speed until proven
+- Subscribe to wallets, not whole chain
+- Token-2022 = toxic by default until extension parsing added
+
+**New resources confirmed:**
+- Bags API: `https://public-api-v2.bags.fm/api/v1/` (key from dev.bags.fm)
+- Bags SDK: `bagsfm/bags-sdk` (GitHub), `@bagsfm/bags-sdk` (npm)
+- Program IDs hardcoded in PLAN.md
+
+**Trade journal added:**
+- Every SKIP/TRADE decision logged with full context
+- Enables post-mortems and prevents "we think we know why" failures
+
+**Next:**
+1. Get Bags API key from dev.bags.fm
+2. Decide ingestion mode (Mode A for now)
+3. Write economics spreadsheet
+4. Collect tokens via API, start signature lab
 
 ---
 

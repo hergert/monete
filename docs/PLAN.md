@@ -12,6 +12,50 @@ Deploy an on-chain signal aggregation bot that monitors Bags.fm token launches v
 
 ---
 
+## Success Definition (Net, Not Gross)
+
+This project is only "successful" if it achieves **positive net expected value** after:
+- all swap fees and slippage
+- priority fees / tips (entry + exit)
+- infrastructure costs (Helius plan, VPS, optional data providers)
+
+### Economics Gate (before paying for higher infra tiers)
+
+Before upgrading to paid streaming (Enhanced WSS / LaserStream tiers), we must show:
+- Projected monthly net P&L (based on Phase 1 EV/trade × expected trades/month)
+  is at least **2× the monthly infra cost**
+- Or, if infra is required for latency, then **capital must be scaled** so infra cost is
+  < 10% of expected monthly gross edge.
+
+If this gate fails, we remain on the lowest-cost infra and accept slower latency,
+or we pause/pivot strategy.
+
+---
+
+## Latency Budget and Kill Criteria
+
+We define two latency measures:
+
+1. **Detection latency**:
+   - `t_detect = received_at - chain_block_time` (approx)
+   - `slot_gap = detected_slot - tx_slot` (more reliable)
+
+2. **End-to-end execution latency**:
+   - `t_exec = our_fill_time - smart_wallet_buy_time`
+   - This includes detection + quote + tx build + broadcast + landing
+
+### Budget targets (Phase 1/2)
+- Median `t_detect` <= 2s OR median `slot_gap` <= 2 slots
+- Median `t_exec` <= 15s for "fast" mode; <= 40s in "cheap" mode
+- P95 `t_exec` must be tracked; if P95 exceeds target by 2× for 2 days, pause new entries
+
+### Kill criterion
+If measured EV per trade turns negative AND median `t_exec` is above budget,
+we treat it as "latency killed the edge" and stop trading until infra is improved
+or strategy is adjusted.
+
+---
+
 ## Architecture: 7 Components
 
 ### A. Ingestion Layer
@@ -28,6 +72,25 @@ Real-time tx stream from Helius.
 
 **Note**: Enhanced WebSockets require Business/Professional plan. Design for fallback.
 
+### Ingestion Modes (Cost vs Latency)
+
+**Mode A — Free/Cheap** (research + early Phase 1):
+- Standard Solana WebSockets (logsSubscribe / signatureSubscribe) to detect DBC activity
+- On event, fetch full tx via RPC and decode
+- Pros: low cost
+- Cons: extra latency (fetch step), risk of missing bursts if processing blocks
+
+**Mode B — Low-latency** (if economics justify):
+- Enhanced WebSockets `transactionSubscribe` with:
+  - `transactionDetails: "full"`
+  - `maxSupportedTransactionVersion: 0`
+  - tight `accountInclude` + `accountRequired` filters
+- Must implement ping (10-min inactivity timer) + reconnect logic
+
+**Mode C — Reliability/Replay** (optional upgrade path):
+- LaserStream SDK with slot replay + backfill on reconnect
+- Only if Mode B misses events or costs become predictable via data tiers
+
 ### B. Event Normalizer + Dedupe
 Raw tx → canonical event stream.
 
@@ -38,25 +101,25 @@ Raw tx → canonical event stream.
 ### C. Signature Decoder
 Answer: "Is this a Bags launch?"
 
-**Multi-factor signature**:
-- Meteora DBC program ID
-- Instruction: `initialize_virtual_pool_with_spl_token`
-- Bags-specific account constraints (the real differentiator)
-- Fee Share config linkage (strong filter—required for Bags launches)
-
 **Deliverable**: `bags_signature_v1.json`
-```json
-{
-  "version": "1",
-  "program_ids": ["..."],
-  "instruction_discriminators": ["..."],
-  "required_account_positions": {...},
-  "test_vectors": {
-    "should_match": ["sig1", "sig2"],
-    "should_not_match": ["sig3", "sig4"]
-  }
-}
-```
+
+We maintain this file with:
+
+- `program_ids`:
+  - DBC: `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN`
+  - DAMM v2: `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG`
+  - Fee Share V2: `FEE2tBhKAt7shrod19QttSVREUYPiyMzoku1mL1gqVK`
+- `launch_match` rules:
+  1. tx contains DBC instruction discriminator for `initialize_virtual_pool_with_spl_token`
+  2. tx contains Bags Fee Share config creation OR known Bags fee-share linkage pattern
+  3. required Bags-specific accounts appear in expected positions (from empirical analysis)
+- `denylist` rules:
+  - known non-Bags DBC patterns (false positive vectors)
+- `test_vectors`:
+  - `should_match`: [signatures...]
+  - `should_not_match`: [signatures...]
+
+**Gate**: <5% false positives on non-Bags DBC test set.
 
 ### D. Market Data + Quote Service
 Truth for slippage/impact.
@@ -109,6 +172,18 @@ wallet_weight = clamp(ev_lower_bound, 0, cap)
 
 **Entry**: Jupiter swap
 
+### Execution Transport
+
+Broadcast transactions using the most reliable transport available:
+- Prefer Helius Sender when live trading (improves landing success; sends to Helius and Jito in parallel)
+- Fall back to standard sendTransaction only if Sender is unavailable
+
+### Exit Automation (Reduce "bot must be online" risk)
+
+Use Jupiter Limit v2 / Trigger-based exits where feasible:
+- Place TP and SL conditions in one order when supported (OCO behavior: one triggers, other cancels)
+- Keep trailing stop self-managed for the remaining portion if needed
+
 **Exit options**:
 1. Jupiter Trigger/Limit v2 for TP/SL (OCO behavior—one triggers, other cancels)
    - Reduces "bot must be online 24/7" risk
@@ -157,20 +232,48 @@ wallet_weight = clamp(ev_lower_bound, 0, cap)
 - `signals_n`, `ev_mean`, `ev_lower_bound`
 - `sniper_score`, `deployer_score`, `status`
 
+**trade_journal** (required for every decision)
+- `id`, `created_at`
+- `launch`: `{ mint, slot, detected_at, signature_version }`
+- `wallets`: `[{ wallet, weight, ev_lower_bound, action_time }]`
+- `toxicity`: `{ checks..., protocol_accounts_excluded: [...] }`
+- `quote`: `{ in_amount, expected_out, price_impact_bps, route_hash }`
+- `economics`: `{ total_cost_usd_est, cost_pct }`
+- `decision`: `{ action (TRADE|SKIP), score, threshold, reason_codes: [...] }`
+- `outcome` (filled post-trade): `{ entry_sig, exit_sig, pnl_usd, pnl_pct }`
+
+This enables post-mortems and prevents "we think we know why" failures.
+
 ---
 
-## Position Sizing (Fixed)
+## Position Sizing (Fee-Aware)
 
 **Bug in previous version**: `max($10, min(...))` forces trades even when quote says skip.
 
-**Correct logic**:
+### Fee-Aware Minimum Trade Size
+
+We estimate all-in fees in USD:
+- entry tx fee + tip + priority fee
+- exit tx fee + tip + priority fee
+- expected slippage cost (from quote impact)
+
+**Rules**:
+1. Require `total_cost_usd <= 1% of position_usd` (default)
+2. Therefore: `position_usd >= total_cost_usd / 0.01`
+3. Also enforce absolute minimum `position_usd >= $10`
+
+**Sizing logic**:
 ```
-position = min(quote_approved_size, 0.02 * capital)
-if position < $10:
-    skip  # Not worth execution costs
+max_by_capital = 0.02 * capital
+min_by_fees = total_cost_usd / 0.01
+position = min(quote_approved_size, max_by_capital)
+if position < max(min_by_fees, $10):
+    skip  # Fees would eat the edge
 ```
 
-This keeps the impact gate consistent.
+If we cannot satisfy both under 2% capital sizing, we skip the trade.
+
+**Note**: Helius Sender has a minimum tip; if used, include in cost calculation.
 
 ---
 
@@ -178,10 +281,18 @@ This keeps the impact gate consistent.
 
 **Bug in previous version**: "Top holder >50%" false-positives on DBC pool authority.
 
-**Correct logic**:
-1. Identify protocol accounts from DBC init (pool authority, vault accounts)
-2. Exclude protocol accounts from holder math
-3. Check: `largest_non_protocol_holder < 50%`
+**Formal spec**:
+1. Parse DBC `initialize_virtual_pool_with_spl_token` instruction
+2. Extract protocol accounts: pool authority, quote vault, base vault, fee receiver
+3. Query token holders via Helius `getTokenLargestAccounts`
+4. Exclude all protocol accounts from holder list
+5. Check: `largest_non_protocol_holder < 50%`
+
+**Protocol account identification** (from DBC init):
+- Account index 0: pool authority (PDA)
+- Account index 7: quote vault
+- Account index 8: base vault
+- Fee Share config accounts (linked via Fee Share program)
 
 **Pre-migration vs Post-migration**:
 - Pre-migration: Check curve/pool state integrity (no "LP unlock" concept)
@@ -193,6 +304,28 @@ This keeps the impact gate consistent.
 - Non-protocol concentration <50%
 - Dev wallet hasn't sold >20%
 - No sudden LP withdrawals / migration events
+
+---
+
+## Economics Gate
+
+**Rule**: Infra spend must be justified by expected monthly EV.
+
+With $500 capital:
+- Max monthly infra spend: 10% of expected monthly profit
+- If EV not proven, use free tier only
+- Upgrade only when paper trading shows clear profitability
+
+**Helius tier decision tree**:
+1. Start with Free tier (1M credits/mo, 10 RPS)
+2. Standard WebSocket streaming is free
+3. Enhanced WSS requires Business+ and is metered (3 credits per 0.1MB)
+4. Upgrade only if: `monthly_EV > (tier_cost * 10)`
+
+**Cost tracking**:
+- Log all API credits consumed
+- Track streaming data volume
+- Weekly cost vs realized PnL review
 
 ---
 
@@ -217,6 +350,42 @@ This keeps the impact gate consistent.
 - Reconnect with backoff
 - Backfill recent slots on reconnect (cover gaps)
 - Idempotency everywhere (webhooks duplicate, reconnects replay)
+
+---
+
+## Technical Decisions (Locked)
+
+### A. Ingestion Strategy: Don't pay for speed until proven needed
+
+Given $500 starting capital:
+- **Phase 0A/0B/1**: Use Mode A (cheap) and measure latency
+- **Only upgrade** if Phase 1 shows EV is positive AND latency sensitivity is proven
+- Avoid building a Ferrari to deliver pizza
+
+### B. Streaming Payload Size
+
+Enhanced `transactionSubscribe` supports `transactionDetails: full|signatures|accounts|none`.
+Full transactions = more data metering + more CPU.
+
+- **Phase 0A**: Use `full` (needed for reverse engineering)
+- **Later**: If cost is high, explore `signatures` + fast `getTransaction` fetch
+- Benchmark EV impact before switching
+
+### C. Wallet Action Detection: Subscribe to wallets, not the whole chain
+
+For convergence, we only need to know what our wallet set is doing:
+- Subscribe to eligible wallets' transactions
+- Detect interactions with newly launched mints/pools
+- **Massively cheaper** than capturing all pool swaps
+
+### D. Token-2022: Toxic by default
+
+Bags DAMM v2 supports SPL and Token-2022 flows.
+Token-2022 can include extensions (transfer fees, permanent delegates, etc.).
+
+**Rule**: If mint is Token-2022 and we haven't implemented extension checks → **skip**
+
+Add Token-2022 support later as a planned upgrade.
 
 ### Two Clocks
 Always store both:
@@ -243,10 +412,18 @@ Latency KPIs require both.
 ### External Services
 | Service | URL | Notes |
 |---------|-----|-------|
-| Helius | https://helius.dev | Free: 30 RPS, 100k credits/day |
+| Helius | https://helius.dev | Free: 1M credits/mo, 10 RPS, 1 sendTx/sec |
 | Birdeye | https://birdeye.so | API key required |
 | Jupiter | https://station.jup.ag/docs | Free, no key |
-| Bags.fm | https://bags.fm | UI only |
+| Bags.fm API | https://public-api-v2.bags.fm/api/v1/ | API key from dev.bags.fm |
+
+### Bags Program IDs (Mainnet)
+| Program | Address |
+|---------|---------|
+| Meteora DBC | `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN` |
+| Meteora DAMM v2 | `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG` |
+| Fee Share V2 | `FEE2tBhKAt7shrod19QttSVREUYPiyMzoku1mL1gqVK` |
+| Fee Share V1 | `FEEhPbKVKnco9EXnaY3i4R5rQVUx91wgVfu8qokixywi` |
 
 ### Setup Commands
 ```bash
@@ -288,9 +465,62 @@ data/
 
 ---
 
-## How It Works
+## Execution Path (Shortest Route to Real Answer)
 
-### Phase 0A: Signature Validation (Days 1-3)
+### Step 1 — Signature Lab (no trading)
+
+**Deliverables**:
+- `data/sample_txs/*.json` (raw transactions)
+- `data/signature_research.md` (findings)
+- `bags_signature_v1.json` with test vectors
+- False positive rate measured against non-Bags DBC set
+
+**Accelerator**: Use Bags API for token collection (faster than UI scraping)
+
+**Gate**: <5% false positive rate
+
+### Step 2 — Ingestion + Dedupe + Persistence (plumbing)
+
+**Deliverables**:
+- `raw_events` table filling
+- Canonical dedupe key working
+- Reconnect/backfill behavior tested (force disconnect, verify no gaps)
+
+**Note**: Helius recommends ping + reconnect patterns due to inactivity timer
+
+### Step 3 — Wallet Scoring (using latency + stored quotes)
+
+**Deliverables**:
+- Wallet report with:
+  - EV mean and EV lower bound
+  - Signal count
+  - Baseline comparison
+
+**Gate**: ≥15 wallets with EV lower bound > 0, edge > baseline by >10%
+
+### Step 4 — Paper Trading (same code paths as live)
+
+**Deliverables**:
+- Paper trades saved as if real
+- Trade journal stored
+- Fee-aware position size enforced
+
+**Gate**: Net EV positive after estimated tips/priority fees and infra cost assumptions
+
+### Step 5 — Micro-Live (circuit breakers + OCO exits)
+
+**Deliverables**:
+- 50+ real trades (or enough to measure degradation)
+- Measured realized slippage vs expected
+- Exit success rate (in seconds)
+
+**Note**: Use OCO exits (TP+SL) where possible to reduce operational risk
+
+---
+
+## How It Works (Detailed Phases)
+
+### Phase 0A: Signature Validation
 
 **Build output**: `bags_signature_v1.json`
 
