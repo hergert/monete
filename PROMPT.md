@@ -23,11 +23,16 @@ Completion is allowed ONLY when ALL are true:
 
 ### Offline / Determinism Rule
 The completion gate MUST be satisfiable with no API keys and no network calls.
+Replay data must be real on-chain data captured ahead of time (no synthetic/mocked events).
+If real data is missing, block with NEED_HUMAN rather than stubbing.
 
 ### Replay Dataset Requirements
 - `data/replay/events.jsonl` (committed)
 - `data/fixtures/bags/*.json` (>=10)
 - `data/fixtures/non_bags_dbc/*.json` (>=20)
+- `data/fixtures/wallet_actions/*.json` (>=50)
+- `data/fixtures/quotes/*.json` (>=50)
+- `data/fixtures/holders/*.json` (>=bags fixtures count)
 
 ---
 
