@@ -2,13 +2,13 @@
 
 ## Read (in this order)
 1. `docs/PLAN.md` — **THE GOAL** (architecture, vision, what we're building)
-2. `IMPLEMENTATION_PLAN.md` — work frontier (pick the next checkbox)
+2. `TODO.md` — work items (pick the next unchecked box)
 3. `progress.txt` — journal + known bugs/runbook
 4. `logs/iter_*.verify.txt` — what broke last time (if present)
 
 ---
 
-## Definition of Done (Contract)
+## Definition of Done
 
 Completion is allowed ONLY when ALL are true:
 
@@ -19,47 +19,12 @@ Completion is allowed ONLY when ALL are true:
    - `signature_gate: { false_positive_rate <= 0.05 }`
    - `db_integrity: { dedupe_ok: true }`
 3. `bags_signature_v1.json` exists and is valid JSON
-4. A single command runs E2E end-to-end deterministically:
-   - `bun run e2e:replay`
-   It must:
-   - start/ensure Postgres is available (via docker compose),
-   - run migrations,
-   - replay events from `data/replay/events.jsonl` (committed),
-   - write `reports/final_validation.json`,
-   - exit 0 only if all gates pass.
+4. A single command (`bun run e2e:replay`) runs E2E deterministically
 
 ### Offline / Determinism Rule
-The completion gate MUST be satisfiable with:
-- no API keys
-- no network calls
-
-Live integrations are allowed behind optional commands, but NOT required for PASS.
-
-### Components Required (must exist as code modules)
-A) Ingestion
-B) Normalizer + Dedupe
-C) Signature Decoder (Bags launch classifier)
-D) Quote Interface (stub in replay; real impl optional)
-E) Wallet Analytics
-F) Strategy Engine
-G) Paper Trading Simulator (no real signing)
-
-### Data & DB Tables
-- raw_events
-- launches
-- wallet_actions
-- quotes
-- positions
-- wallet_scores
-- trade_journal
-
-### Signature Gate
-- false_positive_rate <= 5% on replay negative set
-- bags_should_match_n >= 10
-- non_bags_should_not_match_n >= 20
+The completion gate MUST be satisfiable with no API keys and no network calls.
 
 ### Replay Dataset Requirements
-Repository must contain:
 - `data/replay/events.jsonl` (committed)
 - `data/fixtures/bags/*.json` (>=10)
 - `data/fixtures/non_bags_dbc/*.json` (>=20)
@@ -67,7 +32,7 @@ Repository must contain:
 ---
 
 ## Task
-Pick the SINGLE most important unchecked item in `IMPLEMENTATION_PLAN.md` and do it.
+Pick the SINGLE most important unchecked item in `TODO.md` and do it.
 Do not do large refactors.
 
 ## Validation (REQUIRED)
@@ -77,21 +42,17 @@ After changes, run:
 ```
 
 ## Update rules
-- Check off completed items in `IMPLEMENTATION_PLAN.md` (this is how the loop "remembers").
+- Check off completed items in `TODO.md`
 - Append 5–10 lines to `progress.txt` each iteration:
   - what you changed
   - verify result (pass/fail + first error)
   - next most important item
 
 ## Bugs / issues
-If you find a bug, add an entry to `docs/ISSUES.md` with:
-- symptoms
-- reproduction
-- suspected cause
-- next step
+Add to the "Known Issues" section in `progress.txt`.
 
 ## Git
-If `./scripts/verify.sh` passes AND you completed a plan checkbox:
+If `./scripts/verify.sh` passes AND you completed a checkbox:
 ```bash
 git add -A && git commit -m "<short, specific message>"
 ```
@@ -99,10 +60,12 @@ git add -A && git commit -m "<short, specific message>"
 Do NOT push unless explicitly instructed.
 
 ## Stuck rule
-If the same failure repeats 3 iterations in a row OR no progress (diffstat unchanged):
+If the same failure repeats 3 iterations OR no progress:
 1. Write `BLOCKERS.md` (what you tried, what failed, smallest human action)
 2. Append: `<promise>NEED_HUMAN</promise>` to `progress.txt`
 
 ## Completion
-Only when `specs/PROJECT_CONTRACT.md` DoD is satisfied:
-append `<promise>COMPLETE</promise>` to `progress.txt`
+When Definition of Done is satisfied, append to `progress.txt`:
+```
+<promise>COMPLETE</promise>
+```
