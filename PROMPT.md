@@ -1,60 +1,79 @@
-Read `reports/verify_status.json` to see what's broken.
+# Agent Instructions
 
-Your job: fix the **first failure** in the verification report.
+You are working on Monenete - a Bags.fm signal aggregation bot.
 
-## Process
+## First: Understand the Goal
 
-1. **Read the report** - `reports/verify_status.json` shows all gates (PASS/FAIL/SKIP)
-2. **Find first failure** - look at `summary.first_failure`
-3. **Understand the error** - read the `error` field for that gate
-4. **Fix it** - make the minimal change to make that gate pass
-5. **Verify your fix** - run the specific check to confirm it passes
-6. **Journal** - append to progress.txt what you fixed and the result
-7. **Commit** - if the gate now passes, commit with a concise message
+Read `docs/PLAN.md` to understand what we're building and WHY.
 
-## Commit Rules
+**The real goal**: Detect Bags launches → Score wallets → Paper trade → Validate the strategy works.
 
-When your fix works (gate passes):
-- `git add` only the files you changed
-- Commit with a single-line message: `fix(<gate>): <what you fixed>`
-- Example: `fix(migrations): implement actual postgres connection`
-- NO body, NO Co-Authored-By
-- Never commit `.env` or secrets
+Everything else is in service of this goal.
 
-## Quality Rules
+## Second: Pick the Most Important Task
+
+Read `TODO.md` and `reports/verify_status.json`.
+
+**Don't just pick the first unchecked item.** Think:
+1. What UNBLOCKS the most progress toward the goal?
+2. What's on the critical path to signature validation → e2e → final validation?
+3. What dependencies must be resolved first?
+
+**Priority order** (roughly):
+1. Anything blocking signature detection (core fixtures, signature code)
+2. Anything blocking e2e replay (migrations, replay data)
+3. Supporting infrastructure (other fixtures, reports)
+4. Nice-to-haves (documentation, cleanup)
+
+## Third: Do the Work
 
 - Fix the **root cause**, not symptoms
 - Make **minimal changes** - don't over-engineer
-- **Verify your fix works** before declaring done
-- If stuck after 3 attempts, document and signal NEED_HUMAN
 - **No pipes in bash** - run simple commands, no `|` or `2>&1`
-- Use `./scripts/verify_report.sh` to verify (not verify.sh)
 
-## Gate Dependencies
+## Fourth: Critically Verify It's Done
 
-Some gates depend on others:
-- `signature_validation` needs fixtures to exist first
-- `e2e_replay` needs migrations + fixtures
-- If a gate is SKIP, fix its dependency first
+**Don't just assume it worked.** Actually verify:
+- Run the specific command/test that proves it works
+- Check the output shows success
+- If it's a gate in verify_status.json, run `./scripts/verify_report.sh` and confirm the gate now passes
+
+**A task is NOT done if:**
+- The test still fails
+- The verification shows errors
+- You only edited code but didn't run it
+
+## Fifth: Update TODO.md
+
+Only after VERIFIED success:
+- Check off the completed item: `- [ ]` → `- [x]`
+- Be honest - if it's partial, don't check it off
+
+## Sixth: Journal and Commit
+
+Append to `progress.txt`:
+```
+## Iteration N
+**Task**: <what you picked and why>
+**Actions**: <what you did>
+**Verification**: <command run + result>
+**Result**: PASS | STILL_FAILING | NEED_HUMAN
+```
+
+If the task passes, commit:
+```bash
+git add <files you changed>
+git commit -m "fix(<area>): <what you fixed>"
+```
 
 ## Signals
 
-- **Blocked** (missing data, unclear, stuck): append `<promise>NEED_HUMAN</promise>` to progress.txt
-- **All gates pass**: the loop will detect this and mark COMPLETE
+- **Blocked** (need API key, real data, unclear spec): append `<promise>NEED_HUMAN</promise>` to progress.txt
+- **Stuck** (tried 3 times, still failing): append `<promise>NEED_HUMAN</promise>` with explanation
 
 ## Context Files
 
-- `reports/verify_status.json` — what's broken (your primary input)
-- `TODO.md` — detailed task breakdown (reference)
+- `docs/PLAN.md` — the WHY (architecture, goals, success criteria)
+- `TODO.md` — the WHAT (tasks, checkboxes, phases)
+- `reports/verify_status.json` — current gate status
 - `progress.txt` — history of what's been done
-- `logs/iter_*.verify.txt` — previous verification outputs
-
-## Journal Format (progress.txt)
-
-```
-## Iteration N
-**Gate**: <gate name that was failing>
-**Error**: <what the error was>
-**Fix**: <what you changed>
-**Result**: PASS | STILL_FAILING | NEED_HUMAN
-```
