@@ -1,0 +1,33 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Keys
+*.json
+!package.json
+!tsconfig.json
+keypair*.json
+
+# Node
+node_modules/
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log
+logs/
+
+# Data (may contain sensitive wallet info)
+data/
+*.db
+*.sqlite
