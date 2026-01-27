@@ -2,10 +2,10 @@
 
 > **NOTE**: This file is the agent frontier.
 > - Keep items small and checkable.
-> - Do not duplicate `docs/TODO.md`.
-> - "Done" is defined only in `specs/PROJECT_CONTRACT.md`.
+> - "Done" is defined in `PROMPT.md` (Definition of Done section).
+> - Architecture/vision is in `docs/PLAN.md`.
 
-**Read specs in order**: `specs/README.md` → `specs/PROJECT_CONTRACT.md` → numbered specs
+**Read specs in order**: `specs/README.md` → numbered specs (00-08)
 
 ---
 
@@ -111,7 +111,7 @@
 
 ## P7 — E2E runner + final report
 
-**Spec**: `specs/08_e2e_runner.md`, `specs/PROJECT_CONTRACT.md`
+**Spec**: `specs/08_e2e_runner.md`
 
 - [ ] Implement full `src/e2e-replay.ts` orchestrator
 - [ ] Run all components in sequence

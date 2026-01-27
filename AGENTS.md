@@ -8,7 +8,8 @@ export AGENT_CMD='claude'   # agent runner that reads stdin
 ```
 
 ## Source of truth
-- **"Done"** is defined ONLY by: `specs/PROJECT_CONTRACT.md`
+- **"Goal/Architecture"** lives in: `docs/PLAN.md`
+- **"Done"** is defined in: `PROMPT.md` (Definition of Done section)
 - **"What to do next"** lives in: `IMPLEMENTATION_PLAN.md`
 
 ## What the loop checks
@@ -23,7 +24,7 @@ Live chain data is nondeterministic.
 Replay makes E2E validation stable so the agent can finish autonomously.
 
 ## Where to put bugs
-Use `docs/ISSUES.md` (symptoms + repro + next steps).
+Add to the "Known Issues / Runbook" section in `progress.txt`.
 
 ## Manual commands
 ```bash

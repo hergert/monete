@@ -4,7 +4,6 @@
 
 | Spec | Component | Purpose |
 |------|-----------|---------|
-| [PROJECT_CONTRACT.md](./PROJECT_CONTRACT.md) | — | **Definition of Done** (source of truth) |
 | [00_data_collection.md](./00_data_collection.md) | — | Fixtures + replay dataset requirements |
 | [01_signature_decoder.md](./01_signature_decoder.md) | C | Bags launch classifier |
 | [02_ingestion.md](./02_ingestion.md) | A | Event ingestion (replay + live) |
@@ -15,9 +14,11 @@
 | [07_paper_trading.md](./07_paper_trading.md) | G | Position simulation |
 | [08_e2e_runner.md](./08_e2e_runner.md) | — | E2E orchestrator |
 
+**Note**: Definition of Done is in `PROMPT.md`. Architecture is in `docs/PLAN.md`.
+
 ## Reading Order
 
-1. **Start with**: `PROJECT_CONTRACT.md` — understand what "done" means
+1. **Start with**: `PROMPT.md` (Definition of Done section) — understand what "done" means
 2. **Then**: `00_data_collection.md` — understand what data you need
 3. **Then**: Read component specs in order (01 → 08)
 

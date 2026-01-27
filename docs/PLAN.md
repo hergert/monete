@@ -108,11 +108,12 @@ We maintain this file with:
 - `program_ids`:
   - DBC: `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN`
   - DAMM v2: `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG`
-  - Fee Share V2: `FEE2tBhKAt7shrod19QttSVREUYPiyMzoku1mL1gqVK`
+  - Fee Share V1: `FEEhPbKVKnco9EXnaY3i4R5rQVUx91wgVfu8qokixywi` (active, primary)
+  - Fee Share V2: `FEE2tBhKAt7shrod19QttSVREUYPiyMzoku1mL1gqVK` (appears unused)
 - `launch_match` rules:
-  1. tx contains DBC instruction discriminator for `initialize_virtual_pool_with_spl_token`
-  2. tx contains Bags Fee Share config creation OR known Bags fee-share linkage pattern
-  3. required Bags-specific accounts appear in expected positions (from empirical analysis)
+  1. tx contains Fee Share V1 program (primary Bags differentiator)
+  2. tx contains DBC instruction discriminator for `initialize_virtual_pool_with_spl_token`
+  3. DBC alone is NOT sufficient (shared Meteora infra, causes false positives)
 - `denylist` rules:
   - known non-Bags DBC patterns (false positive vectors)
 - `test_vectors`:
@@ -336,20 +337,86 @@ With $500 capital:
 - Docker Compose
 - Postgres (not SQLite—need concurrency, indexing, analytics)
 - Redis (optional queue/cache)
-- Grafana/Prometheus (metrics)
+- Axiom (metrics + dashboards, free tier: 500GB/month)
 
 ### Services
 - `ingestor` — WSS client
 - `processor` — decode + scoring
 - `executor` — trades + exits
 - `db` — Postgres
-- `metrics` — Grafana stack
+- `metrics` — Axiom SDK (no separate service needed)
 
 ### Operational Requirements
 - Ping every 60s (Helius 10-min inactivity timer)
 - Reconnect with backoff
 - Backfill recent slots on reconnect (cover gaps)
 - Idempotency everywhere (webhooks duplicate, reconnects replay)
+
+---
+
+## Metrics Architecture
+
+### Why Axiom (not Grafana/Prometheus)
+- No infrastructure to manage (fully managed SaaS)
+- 500GB/month free tier (more than enough)
+- Simple SDK: `axiom.ingest()` from bot code
+- Built-in dashboards (no separate Grafana)
+- APL queries for all KPIs (percentiles, aggregations, Sharpe)
+
+### Data Flow
+```
+Bot code
+  ├── Circuit breaker: in-memory counter (milliseconds)
+  ├── Trade journal: Postgres (backup + backtesting)
+  └── Metrics: axiom.ingest() (async, fire-and-forget)
+                    ↓
+              Axiom Cloud
+                    ↓
+         Dashboards + Alerts + Historical queries
+```
+
+### What Goes Where
+
+| Data | Destination | Why |
+|------|-------------|-----|
+| Circuit breaker state | In-memory / Postgres | Needs <10ms response |
+| Trade journal (full) | Postgres | Backtesting, SQL queries |
+| Metrics events | Axiom | Dashboards, alerts, KPIs |
+
+### Axiom Events Schema
+
+**trade_signal**
+- `_time`, `mint`, `score`, `wallet_count`, `t_detect_ms`
+
+**trade_entered**
+- `_time`, `mint`, `size_usd`, `quote_impact_bps`, `entry_price`
+
+**trade_exited**
+- `_time`, `mint`, `pnl_usd`, `pnl_pct`, `t_exec_ms`, `exit_reason`, `slippage_bps`
+
+**circuit_breaker**
+- `_time`, `trigger`, `reason`, `value`
+
+### Circuit Breaker (Local, Not Axiom)
+
+Circuit breakers need millisecond response — cannot use API calls.
+
+```typescript
+// In-memory tracking
+let recentFailures: number[] = []
+
+function checkCircuitBreaker(): boolean {
+  const tenMinAgo = Date.now() - 10 * 60 * 1000
+  recentFailures = recentFailures.filter(t => t > tenMinAgo)
+  return recentFailures.length < 5
+}
+
+function recordFailure() {
+  recentFailures.push(Date.now())
+  // Also send to Axiom for dashboard (async, non-blocking)
+  axiom.ingest('circuit_breaker', [{ trigger: 'exit_failed', count: recentFailures.length }])
+}
+```
 
 ---
 
@@ -415,7 +482,8 @@ Latency KPIs require both.
 | Helius | https://helius.dev | Free: 1M credits/mo, 10 RPS, 1 sendTx/sec |
 | Birdeye | https://birdeye.so | API key required |
 | Jupiter | https://station.jup.ag/docs | Free, no key |
-| Bags.fm API | https://public-api-v2.bags.fm/api/v1/ | API key from dev.bags.fm |
+| Bags.fm API | https://public-api-v2.bags.fm/api/v1/ | API key from dev.bags.fm, `x-api-key` header |
+| Axiom | https://axiom.co | Free: 500GB/month, metrics in preview |
 
 ### Bags Program IDs (Mainnet)
 | Program | Address |
@@ -451,6 +519,8 @@ DB_USER=xxx
 DB_PASSWORD=xxx
 DB_SSLMODE=require
 SOLANA_KEYPAIR_PATH=/path/to/monenete.json  # Phase 2 only
+AXIOM_TOKEN=xxx
+AXIOM_ORG_ID=xxx  # optional
 ```
 
 ### Data Directory
@@ -475,7 +545,7 @@ data/
 - `bags_signature_v1.json` with test vectors
 - False positive rate measured against non-Bags DBC set
 
-**Accelerator**: Use Bags API for token collection (faster than UI scraping)
+**Token collection method**: Monitor Fee Share V1 program on-chain (Bags API has no "list tokens" endpoint)
 
 **Gate**: <5% false positive rate
 
