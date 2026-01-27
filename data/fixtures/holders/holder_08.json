@@ -1,0 +1,67 @@
+{
+  "mint": "2ZhzUhaPm8L9g6iUF1LegbjFHJyXdEXahi8R4eQhBAGS",
+  "slot": 396360822,
+  "block_time": 1769552960,
+  "total_supply_estimate": 976983221.4820439,
+  "largest_accounts": [
+    {
+      "address": "Z12LF4vVLCfUBH7WFP3XCri4xCeyqmUbCBBSC387CXP",
+      "amount": 749795662.515669,
+      "percentage": 76.74601221689963
+    },
+    {
+      "address": "AT1qc1KphFFn4CtaN8jsG8qUC9voJyxs2ehYtJ6WTqqW",
+      "amount": 81725957.06482391,
+      "percentage": 8.365134146403145
+    },
+    {
+      "address": "EYDAbB3CJECNnQbr1mw5B7txZSmZhQYozWtNqPtLTQb1",
+      "amount": 44658518.550299406,
+      "percentage": 4.5710629996853225
+    },
+    {
+      "address": "6ijaA5JVm1pXhNSLYBURsVeD54Y843pGE1qHRAejBZnk",
+      "amount": 13454806.475786064,
+      "percentage": 1.377178868576235
+    },
+    {
+      "address": "DLo7x2XmXmRjos2fmBFD2DaunGfjxEu5iuWNzitA9AoE",
+      "amount": 12832368.70513352,
+      "percentage": 1.3134686884046318
+    },
+    {
+      "address": "AqxcT7QksFdbdKn3YrtuisXJDU7rhnWMKgo9QuhKvnco",
+      "amount": 12336474.753303964,
+      "percentage": 1.262711015097069
+    },
+    {
+      "address": "BE4nCXvhh4jRTcpKRGmibGJiDVkbcsp58cbbASBfHtKA",
+      "amount": 10940739.435546404,
+      "percentage": 1.119849266085629
+    },
+    {
+      "address": "CmFfD89K1SqKhNmXhDwc7GmJCDSoF6jTeS2GPz9sQrKM",
+      "amount": 9154473.296542048,
+      "percentage": 0.9370143821564391
+    },
+    {
+      "address": "D3eXbVzcdyGueK1ctKt11WmCocnQ4cVuvGTmvqopTcky",
+      "amount": 8003715.985941091,
+      "percentage": 0.8192275783201044
+    },
+    {
+      "address": "D4aZpNijs4rGPqzFfTsKvfJh36Mxgh1wajjsEy12b5iT",
+      "amount": 5516759.274409536,
+      "percentage": 0.564672878009188
+    }
+  ],
+  "concentration": {
+    "top_holder_pct": 76.75,
+    "top_5_holders_pct": 92.37,
+    "top_10_holders_pct": 97.08
+  },
+  "_meta": {
+    "source": "helius",
+    "collected_at": "2026-01-27T23:07:16.277Z"
+  }
+}

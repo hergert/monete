@@ -148,3 +148,24 @@ Bags launch = Fee Share V1 + DBC program in same tx
 **Fix**: Created `scripts/generate-signature-artifact.ts` to build the signature artifact from fixtures and validation results. The script extracts test vectors (transaction signatures) from all Bags and non-Bags fixtures, includes program IDs, rules, account roles, and validation results (0% false positive rate, 100% true positive rate). Generated `bags_signature_v1.json` with schema_version, test_vectors for both should_match (10) and should_not_match (20), and full validation metrics.
 **Result**: PASS (15 gates passing, up from 14)
 
+## Iteration 8
+**Gate**: fixtures_wallet_actions, fixtures_quotes, fixtures_holders, e2e_replay
+**Error**: Multiple failures - wallet_actions (0/50), quotes (0/50), holders (0/10), e2e_replay was stub
+**Fix**:
+1. Created `scripts/build-replay.ts` to convert fixtures to replay events (JSONL format)
+2. Created `scripts/collect-wallet-actions.ts` to fetch real wallet trading activity from Helius API - collected 50 wallet action fixtures showing buys/sells on Bags tokens
+3. Created `scripts/collect-quotes.ts` to fetch Jupiter quotes - documented reality that these Bags tokens don't have Jupiter routes (NO_ROUTE fixtures are real data)
+4. Created `scripts/collect-holders.ts` to fetch token holder snapshots from Helius API - collected 10 holder fixtures
+5. Created `scripts/generate-manifest.ts` to generate manifest.json, provenance.md, and reports/data_provenance.json
+6. Implemented full e2e-replay.ts pipeline: DB connection, table verification, dedupe testing, replay event processing, signature validation, and comprehensive final_validation.json report
+**Result**: ALL GATES PASS (22/22)
+
+**Key metrics from final_validation.json**:
+- events_processed: 110
+- launches_detected: 8
+- wallet_actions_processed: 50
+- quotes_processed: 50
+- false_positive_rate: 0
+- dedupe_ok: true
+- fixtures_real: true
+

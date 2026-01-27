@@ -1,0 +1,14 @@
+{
+  "wallet": "GsJQ3o6NM4SFqFRaaMXFZFmzjwWRrtJRVx6KaAEVEiDT",
+  "mint": "G1DXVVmqJs8Ei79QbK41dpgk2WtXSGqLtx9of7o8BAGS",
+  "action": "buy",
+  "slot": 396347472,
+  "block_time": 1769549862,
+  "signature": "2EkDtAmxydS8bdsUKZFtFqWpeMTdrfRpJsCQx9xnva7zRYQREBLTa5mQwxKUF6yAWY9HGZ9jXoasPAA5N9pZkPUz",
+  "instruction_index": 0,
+  "amount_out": 1281752484714002,
+  "_meta": {
+    "source": "helius",
+    "collected_at": "2026-01-27T23:05:00.132Z"
+  }
+}

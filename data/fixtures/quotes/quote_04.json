@@ -1,0 +1,15 @@
+{
+  "mint": "7Mxvi7bi5bnjELB4QNzQ4VrQEPeBgPbWwbfwE1ydBAGS",
+  "in_amount": 100000000,
+  "in_amount_usd_est": 10,
+  "slippage_bps": 500,
+  "expected_out": 0,
+  "price_impact_bps": 0,
+  "ts": "2026-01-27T23:06:57.205Z",
+  "route_summary": "NO_ROUTE",
+  "_meta": {
+    "source": "jupiter",
+    "collected_at": "2026-01-27T23:06:57.205Z",
+    "quote_api_version": "v6"
+  }
+}

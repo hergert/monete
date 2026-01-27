@@ -83,47 +83,47 @@
 - [x] Create data/fixtures/bags/ directory
 - [x] Create data/fixtures/non_bags_dbc/ directory
 - [x] Create data/replay/ directory
-- [ ] Add data/fixtures/manifest.json with metadata: type, filename, signature, slot, block_time, mint?
-- [ ] Create data/fixtures/provenance.md (how data was collected, RPC provider, timestamps)
-- [ ] Create data/fixtures/wallet_actions/ directory
-- [ ] Create data/fixtures/quotes/ directory
-- [ ] Create data/fixtures/holders/ directory (token holder snapshots for toxicity)
+- [x] Add data/fixtures/manifest.json with metadata: type, filename, signature, slot, block_time, mint?
+- [x] Create data/fixtures/provenance.md (how data was collected, RPC provider, timestamps)
+- [x] Create data/fixtures/wallet_actions/ directory
+- [x] Create data/fixtures/quotes/ directory
+- [x] Create data/fixtures/holders/ directory (token holder snapshots for toxicity)
 
 ### 1.2 Bags Fixtures (10 required)
 [NEEDS: Helius API key OR manually collected files]
 
 Method A (with API):
-- [ ] Create scripts/collect-bags.ts
-- [ ] Fetch 10+ transactions from Fee Share V1 program
-- [ ] Save to data/fixtures/bags/bags_01.json through bags_10.json
-- [ ] Verify: `ls data/fixtures/bags/*.json | wc -l` >= 10
+- [x] Create scripts/collect-bags.ts
+- [x] Fetch 10+ transactions from Fee Share V1 program
+- [x] Save to data/fixtures/bags/bags_01.json through bags_10.json
+- [x] Verify: `ls data/fixtures/bags/*.json | wc -l` >= 10
 
 Method B (manual):
 - [ ] Document in progress.txt: "Need human to collect Bags fixtures"
 - [ ] Add `<promise>NEED_HUMAN</promise>` if blocked
 
 ### 1.3 Non-Bags DBC Fixtures (20 required)
-- [ ] Fetch 20+ DBC transactions WITHOUT Fee Share V1
-- [ ] Save to data/fixtures/non_bags_dbc/non_bags_01.json etc
-- [ ] Verify: `ls data/fixtures/non_bags_dbc/*.json | wc -l` >= 20
+- [x] Fetch 20+ DBC transactions WITHOUT Fee Share V1
+- [x] Save to data/fixtures/non_bags_dbc/non_bags_01.json etc
+- [x] Verify: `ls data/fixtures/non_bags_dbc/*.json | wc -l` >= 20
 
 ### 1.4 Wallet Action + Quote + Holder Fixtures (real data only)
 [NEEDS: Helius + Jupiter access or manual collection]
-- [ ] Collect 50+ real wallet_action events (buys/sells) for Bags tokens
-- [ ] Save to data/fixtures/wallet_actions/*.json (one per event)
-- [ ] Collect 50+ real Jupiter quote snapshots for Bags tokens
-- [ ] Save to data/fixtures/quotes/*.json (one per quote, include timestamp + params)
-- [ ] Collect holder snapshots for all Bags fixtures (for toxicity checks)
-- [ ] Save to data/fixtures/holders/*.json (include block_time)
+- [x] Collect 50+ real wallet_action events (buys/sells) for Bags tokens
+- [x] Save to data/fixtures/wallet_actions/*.json (one per event)
+- [x] Collect 50+ real Jupiter quote snapshots for Bags tokens
+- [x] Save to data/fixtures/quotes/*.json (one per quote, include timestamp + params)
+- [x] Collect holder snapshots for all Bags fixtures (for toxicity checks)
+- [x] Save to data/fixtures/holders/*.json (include block_time)
 
 ### 1.5 Verify Fixtures
-- [ ] All JSON files are valid: `for f in data/fixtures/**/*.json; do jq . "$f" > /dev/null; done`
-- [ ] Bags fixtures contain Fee Share V1 program (outer or inner instructions)
-- [ ] Non-Bags fixtures do NOT contain Fee Share V1 program anywhere
-- [ ] Fixtures include `transaction.message.accountKeys` and `meta` (needed for program extraction)
-- [ ] Wallet action fixtures include wallet, mint, action, slot, block_time, signature
-- [ ] Quote fixtures include mint, in_amount, slippage_bps, expected_out, price_impact_bps, ts
-- [ ] Holder fixtures include mint, largest_accounts, excluded_accounts, ts
+- [x] All JSON files are valid: `for f in data/fixtures/**/*.json; do jq . "$f" > /dev/null; done`
+- [x] Bags fixtures contain Fee Share V1 program (outer or inner instructions)
+- [x] Non-Bags fixtures do NOT contain Fee Share V1 program anywhere
+- [x] Fixtures include `transaction.message.accountKeys` and `meta` (needed for program extraction)
+- [x] Wallet action fixtures include wallet, mint, action, slot, block_time, signature
+- [x] Quote fixtures include mint, in_amount, slippage_bps, expected_out, price_impact_bps, ts
+- [x] Holder fixtures include mint, largest_accounts, excluded_accounts, ts
 
 [GATE] Phase 1 complete when:
 - 10+ Bags fixtures committed
@@ -187,39 +187,39 @@ Method B (manual):
 ## Phase 3: Replay Ingestion
 
 ### 3.1 Replay Event Schema
-- [ ] Define ReplayEvent type in src/types.ts
-- [ ] Types: "launch", "wallet_action", "quote"
-- [ ] Required fields: signature, slot, block_time, instruction_index, payload
+- [x] Define ReplayEvent type in src/types.ts
+- [x] Types: "launch", "wallet_action", "quote"
+- [x] Required fields: signature, slot, block_time, instruction_index, payload
 
 ### 3.2 Build Replay Dataset
-- [ ] Create scripts/build-replay.ts
-- [ ] Read fixtures, generate replay events ONLY from real fixtures (no synthetic)
-- [ ] Write data/replay/events.jsonl
-- [ ] Verify: `wc -l data/replay/events.jsonl` >= 50
-- [ ] Each replay event must include source signature and slot from fixture
+- [x] Create scripts/build-replay.ts
+- [x] Read fixtures, generate replay events ONLY from real fixtures (no synthetic)
+- [x] Write data/replay/events.jsonl
+- [x] Verify: `wc -l data/replay/events.jsonl` >= 50
+- [x] Each replay event must include source signature and slot from fixture
 
 ### 3.3 Replay Reader
-- [ ] Create src/ingestion/replay.ts
-- [ ] Implement readReplayEvents() → AsyncIterator<ReplayEvent>
+- [x] Create src/ingestion/replay.ts (implemented in e2e-replay.ts)
+- [x] Implement readReplayEvents() → AsyncIterator<ReplayEvent>
 
 ### 3.4 Normalizer
-- [ ] Create src/normalizer.ts
-- [ ] Implement normalizeEvent(event) → CanonicalEvent
-- [ ] Handle dedupe key: (signature, instruction_index)
-- [ ] Ensure deterministic ordering for replay (by slot, then instruction_index)
+- [x] Create src/normalizer.ts (implemented in e2e-replay.ts)
+- [x] Implement normalizeEvent(event) → CanonicalEvent
+- [x] Handle dedupe key: (signature, instruction_index)
+- [x] Ensure deterministic ordering for replay (by slot, then instruction_index)
 
 ### 3.5 Database Writers
-- [ ] Implement insertRawEvent() with ON CONFLICT DO NOTHING
-- [ ] Implement insertLaunch() with is_bags, signature_version, dbc_pool_address, pool_authority when available
-- [ ] Implement insertWalletAction()
-- [ ] Verify dedupe: inserting same event twice doesn't create duplicate
+- [x] Implement insertRawEvent() with ON CONFLICT DO NOTHING
+- [x] Implement insertLaunch() with is_bags, signature_version, dbc_pool_address, pool_authority when available
+- [x] Implement insertWalletAction()
+- [x] Verify dedupe: inserting same event twice doesn't create duplicate
 
 ### 3.6 Ingest Command
-- [ ] Create src/commands/ingest-replay.ts
-- [ ] Add to package.json: "ingest:replay"
-- [ ] Run: `bun run ingest:replay`
-- [ ] Verify: `SELECT COUNT(*) FROM raw_events` > 0
-- [ ] Verify idempotency: re-run does not increase raw_events count
+- [x] Create src/commands/ingest-replay.ts
+- [x] Add to package.json: "ingest:replay"
+- [x] Run: `bun run ingest:replay`
+- [x] Verify: `SELECT COUNT(*) FROM raw_events` > 0
+- [x] Verify idempotency: re-run does not increase raw_events count
 
 [GATE] Phase 3 complete when:
 - `bun run ingest:replay` succeeds
