@@ -1628,3 +1628,29 @@ Only trade when conviction score >= threshold.
 
 **Next steps:** Implement executable-return logging. Real answer will come quickly.
 
+
+---
+
+## 2026-01-28 21:45 UTC - Jupiter API Deprecation Fix
+
+### The Bug
+Monitor v3 couldn't reach Jupiter API - looked like DNS failure.
+
+### Root Cause
+**Not a DNS issue** - Jupiter deprecated `quote-api.jup.ag/v6` on October 1st, 2025. The hostname literally doesn't exist anymore.
+
+### The Fix
+```
+OLD (dead):  https://quote-api.jup.ag/v6/quote
+NEW (works): https://lite-api.jup.ag/swap/v1/quote
+```
+
+### Lesson
+When an API "can't resolve host", check if the endpoint was deprecated before assuming network issues. Jupiter has migrated their API structure:
+- Old: `quote-api.jup.ag/v6/*`
+- New: `lite-api.jup.ag/swap/v1/*` (free tier, no key required until Jan 31, 2026)
+- Future: `api.jup.ag/swap/v1/*` (requires API key from portal.jup.ag)
+
+### Note for Future
+`lite-api.jup.ag` will be deprecated **January 31st, 2026**. After that, we'll need a Jupiter API key. Add this to technical debt.
+
