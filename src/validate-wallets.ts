@@ -4,10 +4,14 @@
 const HELIUS_API_KEY = process.env.HELIUS_API_KEY || "";
 const BIRDEYE_API_KEY = process.env.BIRDEYE_API_KEY || "";
 
-// Our profitable wallets
+// Top slow traders from expanded analysis (2026-01-28)
+// Sorted by statistical significance (tokens × round_trips)
 const WALLETS_TO_VALIDATE = [
-  { address: "5zf7uryG7jXMEnKvSM2WmmHcJu3Q2fXBpUjZkE7XC2Xr", pnl: "45.9%" },
-  { address: "gasTzr94Pmp4Gf8vknQnqxeYxdgwFjbgdJa4msYRpnB", pnl: "18.0%" },
+  { address: "H9JGaqjUAn9YswMK7NTpwoQwyV1RPoHuVNo56eVi2X9N", pnl: "7.8%", tokens: 4, trips: 5 },
+  { address: "3i51cKbLbaKAqvRJdCUaq9hsnvf9kqCfMujNgFj7nRKt", pnl: "7.1%", tokens: 5, trips: 3 },
+  { address: "ByCrWXeynHEbEfX21a8hjS7YBygz7rRkNcEYSESdhtB6", pnl: "6.4%", tokens: 2, trips: 3 },
+  { address: "D9J2kJeL9uWRcApPht4GCNq5De8NEM4ziMLkBqLtJ8Dn", pnl: "14.1%", tokens: 3, trips: 2 },
+  { address: "FoG4TcYvxy3Ntes3uNtnD6MEp6nJDW8uKngxKzaFSF9P", pnl: "21.0%", tokens: 3, trips: 1 },
 ];
 
 // Bags tokens they traded

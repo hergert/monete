@@ -108,10 +108,10 @@ We maintain this file with:
 - `program_ids`:
   - DBC: `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN`
   - DAMM v2: `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG`
-  - Fee Share V1: `FEEhPbKVKnco9EXnaY3i4R5rQVUx91wgVfu8qokixywi` (active, primary)
-  - Fee Share V2: `FEE2tBhKAt7shrod19QttSVREUYPiyMzoku1mL1gqVK` (appears unused)
+  - Fee Share V2: `FEE2tBhKAt7shrod19QttSVREUYPiyMzoku1mL1gqVK` (current, primary)
+  - Fee Share V1: `FEEhPbKVKnco9EXnaY3i4R5rQVUx91wgVfu8qokixywi` (legacy)
 - `launch_match` rules:
-  1. tx contains Fee Share V1 program (primary Bags differentiator)
+  1. tx contains Fee Share V2 program (primary Bags differentiator)
   2. tx contains DBC instruction discriminator for `initialize_virtual_pool_with_spl_token`
   3. DBC alone is NOT sufficient (shared Meteora infra, causes false positives)
 - `denylist` rules:
@@ -490,8 +490,8 @@ Latency KPIs require both.
 |---------|---------|
 | Meteora DBC | `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN` |
 | Meteora DAMM v2 | `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG` |
-| Fee Share V2 | `FEE2tBhKAt7shrod19QttSVREUYPiyMzoku1mL1gqVK` |
-| Fee Share V1 | `FEEhPbKVKnco9EXnaY3i4R5rQVUx91wgVfu8qokixywi` |
+| Fee Share V2 (current) | `FEE2tBhKAt7shrod19QttSVREUYPiyMzoku1mL1gqVK` |
+| Fee Share V1 (legacy) | `FEEhPbKVKnco9EXnaY3i4R5rQVUx91wgVfu8qokixywi` |
 
 ### Setup Commands
 ```bash
@@ -545,7 +545,7 @@ data/
 - `bags_signature_v1.json` with test vectors
 - False positive rate measured against non-Bags DBC set
 
-**Token collection method**: Monitor Fee Share V1 program on-chain (Bags API has no "list tokens" endpoint)
+**Token collection method**: Monitor Fee Share V2 program on-chain (Bags API has no "list tokens" endpoint)
 
 **Gate**: <5% false positive rate
 
