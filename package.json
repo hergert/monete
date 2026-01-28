@@ -11,9 +11,14 @@
     "sig:check": "bun run src/sig-check.ts",
     "e2e:replay": "bun run src/e2e-replay.ts",
     "ingest:replay": "bun run src/ingest-replay.ts",
-    "db:migrate": "bun run src/db/migrate.ts"
+    "db:migrate": "bun run src/db/migrate.ts",
+    "dbc:test": "bun run src/dbc-client.ts",
+    "birdeye:test": "bun run src/birdeye-client.ts",
+    "analyze:wallet": "bun run src/helius-wallet-analyzer.ts",
+    "discover:traders": "bun run src/discover-traders.ts"
   },
   "devDependencies": {
+    "@types/bn.js": "^5.2.0",
     "@types/bun": "latest",
     "typescript": "^5"
   },
@@ -21,6 +26,9 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@meteora-ag/dynamic-bonding-curve-sdk": "^1.5.1",
+    "@solana/web3.js": "^1.98.4",
+    "bn.js": "^5.2.2",
     "postgres": "^3.4.8"
   }
 }
