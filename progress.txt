@@ -74,6 +74,77 @@ C. Different strategy (not copy trading)
 
 ---
 
+### Methods Used (Reference)
+
+**1. Wallet Discovery (src/birdeye-deep-analysis.ts)**
+- Fetched trades per Bags token via Birdeye `/defi/txs/token`
+- Grouped by wallet, calculated buy/sell totals
+- Filtered: ≥3 trades, ≥2 tokens, positive P&L, <500% P&L
+- Result: 2 eligible wallets from 187 total
+
+**2. Wallet Validation (src/validate-wallets.ts)**
+- Checked if wallet deployed tokens (Helius tx history)
+- Checked sniper patterns (buy latency from launch)
+- Checked deployer relationships
+- Result: Both wallets SAFE (not insiders)
+
+**3. Live Monitoring (src/live-monitor.ts)**
+- Helius WebSocket `logsSubscribe` for wallet activity
+- Parse transactions via Helius `/v0/transactions`
+- Detect BAGS tokens (mint ends in "BAGS")
+- Capture entry price via Birdeye `/defi/price`
+- Measured latency: 1.4s detection + 1s price fetch = 2.4s total
+
+**4. Historical Backtest (src/historical-backtest.ts)**
+- Get wallet's historical trades per token
+- Get OHLCV data to estimate price at (wallet_time + latency)
+- Calculate P&L with fees
+- Result: -1.06% avg (negative EV)
+
+**Key Learning:**
+The wallets we found are "fast traders" - they buy and sell quickly.
+With 2.4s latency, we enter AFTER they've already moved the price.
+We need wallets that HOLD longer, so our delay matters less.
+
+**Wallet Quality Criteria (Updated):**
+- Hold time: entry→exit > 5 minutes (latency-tolerant)
+- Multi-token: traded ≥3 different Bags tokens (not insider)
+- Consistent: positive P&L across multiple tokens (not luck)
+- Active: ≥10 Bags trades total (statistical significance)
+
+---
+
+### Slow Trader Search Results (2026-01-28)
+
+**Method:** src/find-slow-traders.ts
+- Analyzed 11 Bags tokens
+- Collected 550 trades from Birdeye
+- Found 292 unique wallets
+- 52 wallets had completed buy→sell round trips
+
+**Shocking finding:**
+ALL 52 wallets with round trips show **0% realized P&L**
+
+**Interpretation:**
+1. Data issue: Birdeye `volumeUSD` may not reflect actual P&L
+2. OR: These Bags tokens are genuinely zero-sum / unprofitable
+3. OR: Sample is too small (only 50 trades per token)
+
+**Key wallets examined:**
+- 5zf7uryG7jXM (our original): 3 tokens, 56min hold, 0% P&L
+- 9LGjXs2u3c9s: 3 tokens, 155h hold, 0% P&L
+- 3i51cKbLbaKA: 3 tokens, 15h hold, 0% P&L
+
+**Root question unanswered:**
+Does ANYONE make money trading Bags tokens consistently?
+If the baseline is 0% or negative, copy trading cannot work.
+
+**Next step needed:**
+Establish baseline - what is the average return of buying a random Bags token?
+If baseline is negative, the entire strategy is flawed.
+
+---
+
 ### Live Validation Results (2026-01-28)
 
 **Wallets Validated:**
