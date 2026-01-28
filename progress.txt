@@ -1,6 +1,78 @@
 # Progress Log
 
-## Current Status: LIVE_VALIDATED (Ready for paper trading)
+## Current Status: PIVOT TO HISTORICAL BACKTEST
+
+### Direction (2026-01-28)
+
+**Problem identified:** Live monitoring works but is inefficient for validation.
+- 60s of monitoring = 44 detections, only 2 BAGS trades
+- Waiting for sell signals to calculate P&L could take days
+- Sample size too small (2 wallets, ~3 trades each)
+
+**Evidence from live testing:**
+- Detection latency: 1.4s avg (source: reports/live_monitor.json)
+- Price fetch adds: ~1s (source: live-monitor.ts logs)
+- Total delay before we could execute: ~2.5s
+
+**Gap vs PLAN.md requirements:**
+- Plan requires: "≥15 wallets with EV lower bound >0, each with ≥20 signals"
+- We have: 2 wallets with 3 trades each
+- Plan requires: "After 10 days: calculate per-wallet EV"
+- We can simulate this NOW with historical data
+
+**New direction:** Historical backtest simulation
+1. Get historical Bags trades for our wallets via Birdeye
+2. Simulate entry at (wallet_buy_time + 2.5s delay)
+3. Simulate exit at (wallet_sell_time + 2.5s delay)
+4. Calculate P&L after 0.6% round-trip fees
+5. Compare to baseline (random Bags token performance)
+
+**Why this is better:**
+- Immediate answer vs waiting days
+- Larger sample size (all historical trades)
+- Can test different latency assumptions
+- Matches PLAN.md Phase 0B: "realistic simulation"
+
+---
+
+### Backtest Results (2026-01-28)
+
+**Parameters:**
+- Detection latency: 1400ms (from live testing)
+- Price fetch latency: 1000ms (from live testing)
+- Total delay: 2400ms
+- Round-trip fees: 0.6%
+
+**Results:**
+- Total simulated trades: 4
+- Closed trades: 1
+- Open positions: 3
+
+**P&L (closed trade):**
+- Our P&L after fees: **-1.06%**
+- Win rate: **0%**
+
+**Open positions (unrealized):**
+- ehipS3kn9GUS...BAGS: -0.03%
+- H5hygVvXiYxk...BAGS: -2.70%
+- 5arEQv5tGJj8...BAGS: -0.47%
+
+**VERDICT: ❌ NEGATIVE EXPECTED VALUE**
+
+Following these wallets with 2.4s latency produces negative returns after fees.
+This confirms PLAN.md warning: "Smart money convergence collapses when latency erases alpha"
+
+**Root causes:**
+1. Sample size too small (4 trades)
+2. Latency (2.4s) may be erasing edge
+3. These wallets may not be the right signal source
+
+**Next options:**
+A. Find more/better wallets (Birdeye top traders API)
+B. Reduce latency (faster infra, but costs money)
+C. Different strategy (not copy trading)
+
+---
 
 ### Live Validation Results (2026-01-28)
 
