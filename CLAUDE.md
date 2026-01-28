@@ -63,20 +63,17 @@ Commit format:
 - Never commit `.env`, API keys, or keypairs
 - No secrets in logs or error messages
 
-## Current Strategy: Curator Selection
+## Getting Up to Speed
 
-**The question:** Do curator wallets (slow traders with historical positive returns) pick tokens that outperform over 6 hours?
+Read these in order:
+1. `CURRENT_STATUS.md` - what's running now, what we're waiting for
+2. `progress.txt` - full history, learnings, strategy context
 
-**Key files:**
+## Key Files
+
 - `src/live-curator-monitor.ts` - the live monitor
 - `reports/paper_trades_curator.json` - collected data
 - `reports/slow_traders.json` - the 12 curator wallets
-
-**Decision criteria:**
-- 50+ signals with 6h data
-- 95% CI lower bound > 0% → proceed to real trading
-- Mean > 0% but CI includes 0 → continue paper trading
-- Mean ≤ 0% → pivot
 
 ---
 
