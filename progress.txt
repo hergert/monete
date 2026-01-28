@@ -1654,3 +1654,62 @@ When an API "can't resolve host", check if the endpoint was deprecated before as
 ### Note for Future
 `lite-api.jup.ag` will be deprecated **January 31st, 2026**. After that, we'll need a Jupiter API key. Add this to technical debt.
 
+
+---
+
+## 2026-01-28 22:00 UTC - Monitor v3 Deployed
+
+### What We Built Today
+
+Implemented all feedback suggestions from the deep analysis of our first 14 signals:
+
+**Monitor v3 Features:**
+| Feature | Purpose |
+|---------|---------|
+| More checkpoints (15m, 30m, 1h, 6h, 24h) | See bimodal pattern earlier |
+| Executable returns (Jupiter quotes) | Know if gains are actually capturable |
+| Confirmation delay (2 min) | Filter landmine tokens |
+| Probation rule | Flag if <5% at 15m, track if cutting would have helped |
+| Principal-back simulation | Track hypothetical return if we locked at +50% |
+| Liquidity stop | Flag when impact >10%, record what exit then yields |
+| Conviction tracking | Extract curator buy size (SOL/USD) from tx |
+| Token age at entry | How old is token when curator buys |
+| Market heartbeat | Last trade time, recent trade count |
+
+### Key Insights from First 14 Signals
+
+1. **Fat-tail distribution** - 4 home runs (+46% to +155%) pay for everything
+2. **Remove top 4 winners** → remaining 10 trades avg -13.3%
+3. **No moderate winners** - either big win or flat/loss (bimodal)
+4. **Liquidity death is main risk** - paper marks ≠ executable returns
+5. **One rug (-73%) nearly flipped the whole result**
+
+### Bug Fixed: Jupiter API Deprecation
+
+`quote-api.jup.ag/v6` was deprecated Oct 2025. Updated to `lite-api.jup.ag/swap/v1`.
+
+Note: `lite-api.jup.ag` will require API key after Jan 31, 2026.
+
+### Current State
+
+- Monitor v3 running in tmux session `curator`
+- Fresh start - no signals collected yet
+- Waiting for curator BAGS token buys
+- All APIs verified working (Helius, Birdeye, Jupiter)
+
+### What We're Testing
+
+The enhanced monitor will answer:
+1. Are the paper gains actually executable? (Jupiter quotes)
+2. Does early exit (probation at 15m) improve returns?
+3. Does principal-back strategy reduce risk?
+4. How many trades die from liquidity death?
+5. Does curator buy size correlate with quality?
+
+### Files Changed
+
+- `src/live-curator-monitor.ts` - v3 with all features
+- `scripts/curator-status.sh` - shows all new metrics
+- `CLAUDE.md` - operations guide for future agents
+- `progress.txt` - this journal
+
