@@ -1477,3 +1477,154 @@ The PLAN.md was correct: "Smart money convergence collapses when latency erases 
 ---
 
 <!-- Gate check: 2/15 eligible wallets. Need more Bags tokens. -->
+
+---
+
+## 2026-01-28 20:30 UTC - Deep Analysis of Early Results
+
+### The Numbers Tell a Story
+
+**Reconciling the metrics:**
+- Raw data: +14.25% avg net, 64.29% win rate (9/14)
+- Excluding worst trade (-73.67%): +21.01% avg, 69.2% win rate
+
+**Key insight:** The entire result is "one rug away" from looking amazing. This is the core finding.
+
+### The Distribution Is Everything
+
+```
+HOME RUNS (4 trades):     +155%, +73%, +58%, +46%
+FLAT WINNERS (5 trades):  +0.23%, +0.39%, +2.53%, +2.54%, +2.98%
+LOSERS (5 trades):        -3.77%, -9.00%, -23.38%, -31.69%, -73.67%
+```
+
+**Critical derived fact:**
+- Remove top 4 winners → remaining 10 trades avg -13.3% net
+- The edge IS the fat tail, not "most trades win"
+
+**This is a convex/options-like strategy:**
+- Many small/flat outcomes
+- Some large wins
+- Occasional nasty blowups
+
+### What This Implies for Execution
+
+✅ Must stay in long enough to catch home runs
+✅ Must not cap winners too aggressively  
+✅ Must aggressively prevent "unexitable → full loss" scenarios
+
+### The Hidden Variable: Liquidity Death
+
+**Current tracking flaw:**
+```
+netReturn1h = (price1h / entryPrice - 1) - 2.14%
+```
+
+This is PRICE return, not EXECUTABLE return.
+
+**The failure mode:**
+- Token shows price -20% (fine, stop out)
+- BUT sell quote fails or impact is insane
+- Real loss is -50% to -100%, not -20%
+
+**This is the main risk.** If 4 trades become full losses, EV flips negative.
+
+### Time-Based Exits Are Wrong
+
+Given bimodal distribution:
+- Home runs exist → let them run
+- Liquidity death exists → exit before market dies
+
+**Exits should be state-based, not time-based:**
+- State = price move + liquidity + routability + impact
+
+### No Moderate Winners (Bimodal Distribution)
+
+Winners breakdown:
+- 4 huge (>40%)
+- 5 tiny (<3%)
+- 0 moderate (+10-20%)
+
+**This suggests:** If trade isn't acting like a future home run early, don't babysit it.
+
+### Proposed Changes (Prioritized)
+
+**HIGH PRIORITY - Change A: Track Executable Return**
+At each checkpoint, get actual sell quote:
+- sell_quote_exists: boolean
+- sell_price_impact_bps: number
+- executable_return: (sell_exec_price / buy_exec_price - 1) - fees
+- If no sell quote: status = UNEXITABLE, return = -100% for risk
+
+This stops us from fooling ourselves with paper marks.
+
+**HIGH PRIORITY - Change B: Liquidity Stop**
+Exit when:
+- Sell quote impact > 8-12% for our size
+- OR sell quote fails (no route)
+- OR last trade age > X minutes (market dying)
+
+This is "exit if you can still exit."
+
+**MEDIUM PRIORITY - Change C: Principal-Back Rule**
+When trade hits +40-60%:
+- Sell enough to recover principal
+- Leave remainder as "free ride" moonbag
+
+At +60%: selling ~65% returns initial stake, rest rides for 2-10x tail.
+
+**MEDIUM PRIORITY - Change D: Confirmation Delay**
+After curator buy detection, wait 120-180 seconds:
+- Verify token still routable
+- Sell quote exists for test size
+- Price not dumping violently
+
+Filter landmines, reduce signals, improve quality.
+
+**LOWER PRIORITY - Change E: Conviction Weighting**
+Track curator buy size vs their history.
+Only trade when conviction score >= threshold.
+
+### New KPIs to Track
+
+| KPI | Target | Why |
+|-----|--------|-----|
+| exit_feasible_rate_1h | > 80% | Can we actually exit? |
+| catastrophic_loss_rate | < 5-10% | Executable < -50% |
+| home_run_capture_rate | high enough | > +40% executable |
+
+### What to Log Immediately
+
+**Entry context:**
+- token_age_seconds at entry
+- is_migrated (DBC vs DAMM)
+- buy_quote_impact_bps at intended size
+- sell_quote_impact_bps at entry (tradability sanity check!)
+- curator_buy_size_usd and conviction_score
+
+**Exit feasibility checkpoints (5m/15m/30m/60m):**
+- sell_quote_exists
+- sell_quote_impact_bps
+- executable_price
+- executable_return_net
+
+**Liquidity death markers:**
+- time when sell quote first becomes impossible
+- time when impact exceeds X%
+- last trade timestamp (market heartbeat)
+
+### Assessment: Real Edge or Lucky Hour?
+
+**Promising:**
+- Fat-tail wins observed
+- Win rate > 60%
+- Avg positive after fees
+
+**Not proven:**
+- Only 14 signals
+- Only 1 curator (concentration risk)
+- Price-based marks, not executable returns
+- Liquidity death can erase paper gains
+
+**Next steps:** Implement executable-return logging. Real answer will come quickly.
+

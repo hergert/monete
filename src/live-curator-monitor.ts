@@ -1,6 +1,6 @@
-// Live Curator Monitor
-// Watches curator wallets for new buys, tracks forward returns in real-time
-// This bypasses historical data limitations by collecting data as it happens
+// Live Curator Monitor v2
+// Enhanced with: executable returns, liquidity tracking, confirmation delay
+// Based on analysis of first 14 signals showing fat-tail distribution
 
 const HELIUS_API_KEY = process.env.HELIUS_API_KEY || "";
 const BIRDEYE_API_KEY = process.env.BIRDEYE_API_KEY || "";
@@ -16,13 +16,30 @@ const CURATOR_WALLETS = [
   "H9JGaqjUAn9YswMK7NTpwoQwyV1RPoHuVNo56eVi2X9N", // 7.8% P&L
   "3i51cKbLbaKAqvRJdCUaq9hsnvf9kqCfMujNgFj7nRKt", // 7.1% P&L
   "ByCrWXeynHEbEfX21a8hjS7YBygz7rRkNcEYSESdhtB6", // 6.4% P&L
-  "APkGv3PxJWbTNc7x5mPGUhNdnq95HH4p2qzxBMj3fjYY", // 4.1% P&L
+  "APkGv3PxJWbTNc7x5mPGUhNdq95HH4p2qzxBMj3fjYY", // 4.1% P&L
   "GDAtwgeoSik1aAnqPSehe8mgL4fZRhQmYfyxGw5tZ7tX", // 0.1% P&L
   "HydraXoSz7oE3774DoWQQaofKb31Kbn2cbcqG4ShKy85", // 0.1% P&L
 ];
 
 const ROUND_TRIP_FEES_PCT = 2.14;
 const PAPER_TRADES_FILE = "reports/paper_trades_curator.json";
+const CONFIRMATION_DELAY_MS = 120_000; // 2 minutes
+const TEST_POSITION_SIZE_USD = 50; // Size to test for exit quotes
+
+// Pending signals waiting for confirmation
+const pendingSignals = new Map<string, {
+  signature: string;
+  wallet: string;
+  token: string;
+  detectedAt: number;
+}>();
+
+interface ExitFeasibility {
+  exists: boolean;
+  priceImpactBps: number | null;
+  executablePrice: number | null;
+  executableReturn: number | null; // After fees
+}
 
 interface PaperTrade {
   id: string;
@@ -31,19 +48,40 @@ interface PaperTrade {
   tokenName?: string;
   detectedAt: number; // Unix timestamp
   entryPrice: number;
-  // Scheduled price checks
+
+  // Entry context (new)
+  entryContext?: {
+    curatorBuySizeUsd?: number;
+    sellQuoteExistsAtEntry: boolean;
+    sellImpactBpsAtEntry: number | null;
+    tokenAgeSeconds?: number;
+  };
+
+  // Price-based returns (paper marks)
   price1h?: number;
   price6h?: number;
   price24h?: number;
-  // Calculated returns
   return1h?: number;
   return6h?: number;
   return24h?: number;
   netReturn1h?: number;
   netReturn6h?: number;
   netReturn24h?: number;
+
+  // Executable returns (real tradability) - NEW
+  exit1h?: ExitFeasibility;
+  exit6h?: ExitFeasibility;
+  exit24h?: ExitFeasibility;
+
+  // Liquidity death tracking - NEW
+  liquidityDeath?: {
+    firstUnexitableAt?: number; // Unix timestamp
+    lastExitableAt?: number;
+  };
+
   // Metadata
   status: "pending_1h" | "pending_6h" | "pending_24h" | "complete";
+  exitStatus?: "exitable" | "unexitable" | "unknown";
   signature?: string;
 }
 
@@ -59,6 +97,10 @@ interface PaperTradesData {
     winRate1h: number | null;
     winRate6h: number | null;
     winRate24h: number | null;
+    // New executable metrics
+    avgExecReturn1h: number | null;
+    exitFeasibleRate1h: number | null;
+    unexitableCount: number;
   };
   trades: PaperTrade[];
 }
@@ -89,6 +131,69 @@ async function getCurrentPrice(token: string): Promise<number | null> {
     return json.data?.value || null;
   } catch (e) {
     console.log(`  Error getting price for ${token}: ${e}`);
+    return null;
+  }
+}
+
+// NEW: Get sell quote to check executable return
+async function getSellQuote(token: string, amountUsd: number): Promise<ExitFeasibility> {
+  try {
+    // First get token price to calculate amount
+    const price = await getCurrentPrice(token);
+    if (!price) {
+      return { exists: false, priceImpactBps: null, executablePrice: null, executableReturn: null };
+    }
+
+    // Calculate token amount for our position size
+    const tokenAmount = amountUsd / price;
+
+    // Use Jupiter quote API for actual executable price
+    // Token -> SOL quote
+    const SOL_MINT = "So11111111111111111111111111111111111111112";
+    const response = await fetch(
+      `https://quote-api.jup.ag/v6/quote?inputMint=${token}&outputMint=${SOL_MINT}&amount=${Math.floor(tokenAmount * 1e9)}&slippageBps=100`
+    );
+
+    if (!response.ok) {
+      return { exists: false, priceImpactBps: null, executablePrice: null, executableReturn: null };
+    }
+
+    const quote = await response.json() as any;
+
+    if (!quote.outAmount) {
+      return { exists: false, priceImpactBps: null, executablePrice: null, executableReturn: null };
+    }
+
+    // Calculate executable price and impact
+    const outAmountSol = parseInt(quote.outAmount) / 1e9;
+    const priceImpactBps = quote.priceImpactPct ? Math.round(parseFloat(quote.priceImpactPct) * 100) : null;
+
+    // Get SOL price to convert to USD
+    const solPrice = await getSolPrice();
+    const executableUsd = outAmountSol * (solPrice || 150); // Fallback to $150 SOL
+    const executablePrice = executableUsd / tokenAmount;
+
+    return {
+      exists: true,
+      priceImpactBps,
+      executablePrice,
+      executableReturn: null, // Will be calculated with entry price
+    };
+  } catch (e) {
+    console.log(`  Error getting sell quote: ${e}`);
+    return { exists: false, priceImpactBps: null, executablePrice: null, executableReturn: null };
+  }
+}
+
+async function getSolPrice(): Promise<number | null> {
+  try {
+    const response = await rateLimitedBirdeyeFetch(
+      `https://public-api.birdeye.so/defi/price?address=So11111111111111111111111111111111111111112`
+    );
+    if (!response.ok) return null;
+    const json = await response.json() as any;
+    return json.data?.value || null;
+  } catch {
     return null;
   }
 }
@@ -134,6 +239,9 @@ async function loadPaperTrades(): Promise<PaperTradesData> {
       winRate1h: null,
       winRate6h: null,
       winRate24h: null,
+      avgExecReturn1h: null,
+      exitFeasibleRate1h: null,
+      unexitableCount: 0,
     },
     trades: [],
   };
@@ -149,6 +257,11 @@ function calculateSummary(trades: PaperTrade[]): PaperTradesData["summary"] {
   const valid6h = trades.filter(t => t.netReturn6h !== undefined);
   const valid24h = trades.filter(t => t.netReturn24h !== undefined);
 
+  // Executable returns (where exit was feasible)
+  const exec1h = trades.filter(t => t.exit1h?.executableReturn !== undefined && t.exit1h?.executableReturn !== null);
+  const feasible1h = trades.filter(t => t.exit1h !== undefined);
+  const unexitable = trades.filter(t => t.exitStatus === "unexitable");
+
   const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
   const winRate = (arr: number[]) => arr.length > 0 ? (arr.filter(x => x > 0).length / arr.length) * 100 : null;
 
@@ -159,6 +272,11 @@ function calculateSummary(trades: PaperTrade[]): PaperTradesData["summary"] {
     winRate1h: winRate(valid1h.map(t => t.netReturn1h!)),
     winRate6h: winRate(valid6h.map(t => t.netReturn6h!)),
     winRate24h: winRate(valid24h.map(t => t.netReturn24h!)),
+    avgExecReturn1h: avg(exec1h.map(t => t.exit1h!.executableReturn!)),
+    exitFeasibleRate1h: feasible1h.length > 0
+      ? (feasible1h.filter(t => t.exit1h?.exists).length / feasible1h.length) * 100
+      : null,
+    unexitableCount: unexitable.length,
   };
 }
 
@@ -173,44 +291,100 @@ async function checkPendingTrades(data: PaperTradesData): Promise<void> {
 
     // Check 1h mark
     if (trade.status === "pending_1h" && age >= 3600) {
-      console.log(`  Checking 1h price for ${trade.token.slice(0, 12)}...`);
+      console.log(`  Checking 1h for ${trade.token.slice(0, 12)}...`);
       const price = await getCurrentPrice(trade.token);
+
+      // Get executable return (sell quote)
+      const exitCheck = await getSellQuote(trade.token, TEST_POSITION_SIZE_USD);
+
       if (price) {
         trade.price1h = price;
         trade.return1h = ((price - trade.entryPrice) / trade.entryPrice) * 100;
         trade.netReturn1h = trade.return1h - ROUND_TRIP_FEES_PCT;
+
+        // Calculate executable return
+        if (exitCheck.exists && exitCheck.executablePrice) {
+          exitCheck.executableReturn = ((exitCheck.executablePrice - trade.entryPrice) / trade.entryPrice) * 100 - ROUND_TRIP_FEES_PCT;
+        } else if (!exitCheck.exists) {
+          // Mark as unexitable - assume -100% for risk
+          exitCheck.executableReturn = -100;
+          trade.exitStatus = "unexitable";
+          if (!trade.liquidityDeath) trade.liquidityDeath = {};
+          trade.liquidityDeath.firstUnexitableAt = now;
+        }
+
+        trade.exit1h = exitCheck;
         trade.status = "pending_6h";
         updated = true;
-        console.log(`    1h: ${trade.return1h.toFixed(2)}% gross, ${trade.netReturn1h.toFixed(2)}% net`);
+
+        console.log(`    Price return: ${trade.netReturn1h.toFixed(2)}% net`);
+        if (exitCheck.exists) {
+          console.log(`    Exec return:  ${exitCheck.executableReturn?.toFixed(2)}% (impact: ${exitCheck.priceImpactBps}bps)`);
+        } else {
+          console.log(`    ⚠️ UNEXITABLE - no sell route!`);
+        }
       }
     }
 
     // Check 6h mark
     if (trade.status === "pending_6h" && age >= 21600) {
-      console.log(`  Checking 6h price for ${trade.token.slice(0, 12)}...`);
+      console.log(`  Checking 6h for ${trade.token.slice(0, 12)}...`);
       const price = await getCurrentPrice(trade.token);
+      const exitCheck = await getSellQuote(trade.token, TEST_POSITION_SIZE_USD);
+
       if (price) {
         trade.price6h = price;
         trade.return6h = ((price - trade.entryPrice) / trade.entryPrice) * 100;
         trade.netReturn6h = trade.return6h - ROUND_TRIP_FEES_PCT;
+
+        if (exitCheck.exists && exitCheck.executablePrice) {
+          exitCheck.executableReturn = ((exitCheck.executablePrice - trade.entryPrice) / trade.entryPrice) * 100 - ROUND_TRIP_FEES_PCT;
+        } else if (!exitCheck.exists) {
+          exitCheck.executableReturn = -100;
+          trade.exitStatus = "unexitable";
+          if (!trade.liquidityDeath) trade.liquidityDeath = {};
+          if (!trade.liquidityDeath.firstUnexitableAt) {
+            trade.liquidityDeath.firstUnexitableAt = now;
+          }
+        }
+
+        trade.exit6h = exitCheck;
         trade.status = "pending_24h";
         updated = true;
-        console.log(`    6h: ${trade.return6h.toFixed(2)}% gross, ${trade.netReturn6h.toFixed(2)}% net`);
+
+        console.log(`    Price return: ${trade.netReturn6h.toFixed(2)}% net`);
+        if (exitCheck.exists) {
+          console.log(`    Exec return:  ${exitCheck.executableReturn?.toFixed(2)}%`);
+        } else {
+          console.log(`    ⚠️ UNEXITABLE at 6h`);
+        }
       }
     }
 
     // Check 24h mark
     if (trade.status === "pending_24h" && age >= 86400) {
-      console.log(`  Checking 24h price for ${trade.token.slice(0, 12)}...`);
+      console.log(`  Checking 24h for ${trade.token.slice(0, 12)}...`);
       const price = await getCurrentPrice(trade.token);
+      const exitCheck = await getSellQuote(trade.token, TEST_POSITION_SIZE_USD);
+
       if (price) {
         trade.price24h = price;
         trade.return24h = ((price - trade.entryPrice) / trade.entryPrice) * 100;
         trade.netReturn24h = trade.return24h - ROUND_TRIP_FEES_PCT;
+
+        if (exitCheck.exists && exitCheck.executablePrice) {
+          exitCheck.executableReturn = ((exitCheck.executablePrice - trade.entryPrice) / trade.entryPrice) * 100 - ROUND_TRIP_FEES_PCT;
+        } else if (!exitCheck.exists) {
+          exitCheck.executableReturn = -100;
+          trade.exitStatus = "unexitable";
+        }
+
+        trade.exit24h = exitCheck;
         trade.status = "complete";
         data.completeSignals++;
         updated = true;
-        console.log(`    24h: ${trade.return24h.toFixed(2)}% gross, ${trade.netReturn24h.toFixed(2)}% net`);
+
+        console.log(`    24h: ${trade.netReturn24h.toFixed(2)}% net`);
         console.log(`    ✓ Trade complete`);
       }
     }
@@ -243,11 +417,9 @@ async function parseTransaction(signature: string): Promise<{ token: string; sid
       const mint = transfer.mint || "";
       if (!isBagsToken(mint)) continue;
 
-      // Determine if buy or sell based on wallet
       const fromUserAccount = transfer.fromUserAccount || "";
       const toUserAccount = transfer.toUserAccount || "";
 
-      // Check if one of our curators is involved
       for (const curator of CURATOR_WALLETS) {
         if (toUserAccount === curator) {
           return { token: mint, side: "buy", wallet: curator };
@@ -258,11 +430,8 @@ async function parseTransaction(signature: string): Promise<{ token: string; sid
       }
     }
 
-    // Also check native transfers and swap events
-    const nativeTransfers = tx.nativeTransfers || [];
+    // Also check swap events
     const events = tx.events || {};
-
-    // If it's a swap event with a BAGS token
     if (events.swap) {
       const swap = events.swap;
       const tokenInputs = swap.tokenInputs || [];
@@ -270,7 +439,6 @@ async function parseTransaction(signature: string): Promise<{ token: string; sid
 
       for (const input of tokenInputs) {
         if (isBagsToken(input.mint)) {
-          // Curator is selling BAGS token
           if (CURATOR_WALLETS.includes(swap.nativeInput?.account || "")) {
             return { token: input.mint, side: "sell", wallet: swap.nativeInput.account };
           }
@@ -279,7 +447,6 @@ async function parseTransaction(signature: string): Promise<{ token: string; sid
 
       for (const output of tokenOutputs) {
         if (isBagsToken(output.mint)) {
-          // Curator is buying BAGS token
           if (CURATOR_WALLETS.includes(swap.nativeOutput?.account || "") ||
               CURATOR_WALLETS.includes(tx.feePayer || "")) {
             const wallet = CURATOR_WALLETS.find(w =>
@@ -300,50 +467,49 @@ async function parseTransaction(signature: string): Promise<{ token: string; sid
   }
 }
 
-async function handleNewTransaction(signature: string, data: PaperTradesData): Promise<void> {
-  const parsed = await parseTransaction(signature);
-  if (!parsed) return;
-  if (parsed.side !== "buy") return; // Only track buys
+// NEW: Confirmation delay handler
+async function processConfirmedSignal(
+  signal: { signature: string; wallet: string; token: string; detectedAt: number },
+  data: PaperTradesData
+): Promise<void> {
+  console.log(`\n✅ CONFIRMING SIGNAL after ${CONFIRMATION_DELAY_MS / 1000}s delay`);
+  console.log(`  Token: ${signal.token}`);
 
-  // Check if we already have this trade
-  const existingId = `${parsed.wallet}-${parsed.token}-${Math.floor(Date.now() / 60000)}`;
-  if (data.trades.some(t => t.id.startsWith(`${parsed.wallet}-${parsed.token}`))) {
-    // Might be duplicate or recent trade, skip if within last hour
-    const recent = data.trades.find(t =>
-      t.curator === parsed.wallet &&
-      t.token === parsed.token &&
-      (Date.now() / 1000 - t.detectedAt) < 3600
-    );
-    if (recent) {
-      console.log(`  Skipping duplicate trade for ${parsed.token.slice(0, 12)}...`);
-      return;
-    }
+  // Verify token is still routable
+  const exitCheck = await getSellQuote(signal.token, TEST_POSITION_SIZE_USD);
+  if (!exitCheck.exists) {
+    console.log(`  ⚠️ Token no longer routable - SKIPPING (landmine avoided)`);
+    return;
   }
+  console.log(`  ✓ Token still routable (impact: ${exitCheck.priceImpactBps}bps)`);
 
-  console.log(`\n🎯 CURATOR BUY DETECTED`);
-  console.log(`  Curator: ${parsed.wallet.slice(0, 12)}...`);
-  console.log(`  Token: ${parsed.token}`);
-  console.log(`  Signature: ${signature}`);
-
-  // Get entry price
-  const entryPrice = await getCurrentPrice(parsed.token);
+  // Get current price (may have moved since detection)
+  const entryPrice = await getCurrentPrice(signal.token);
   if (!entryPrice) {
-    console.log(`  ⚠️ Could not get entry price, skipping`);
+    console.log(`  ⚠️ Could not get price - SKIPPING`);
     return;
   }
 
+  // Check if price has dumped violently (>30% down from detection)
+  // We don't have detection price, so we just check routability passed above
+
   // Get token info
-  const tokenInfo = await getTokenInfo(parsed.token);
+  const tokenInfo = await getTokenInfo(signal.token);
 
   const trade: PaperTrade = {
-    id: `${parsed.wallet}-${parsed.token}-${Date.now()}`,
-    curator: parsed.wallet,
-    token: parsed.token,
+    id: `${signal.wallet}-${signal.token}-${Date.now()}`,
+    curator: signal.wallet,
+    token: signal.token,
     tokenName: tokenInfo?.name,
-    detectedAt: Math.floor(Date.now() / 1000),
+    detectedAt: Math.floor(Date.now() / 1000), // Use confirmation time as entry
     entryPrice,
+    entryContext: {
+      sellQuoteExistsAtEntry: exitCheck.exists,
+      sellImpactBpsAtEntry: exitCheck.priceImpactBps,
+    },
     status: "pending_1h",
-    signature,
+    exitStatus: "exitable",
+    signature: signal.signature,
   };
 
   data.trades.push(trade);
@@ -352,13 +518,63 @@ async function handleNewTransaction(signature: string, data: PaperTradesData): P
 
   console.log(`  Entry price: $${entryPrice.toFixed(10)}`);
   console.log(`  Token: ${tokenInfo?.name || "Unknown"}`);
-  console.log(`  ✓ Paper trade logged, will check at +1h, +6h, +24h`);
+  console.log(`  ✓ Paper trade logged (will check at +1h, +6h, +24h)`);
+}
+
+async function handleNewTransaction(signature: string, data: PaperTradesData): Promise<void> {
+  const parsed = await parseTransaction(signature);
+  if (!parsed) return;
+  if (parsed.side !== "buy") return;
+
+  // Check for duplicates
+  const recent = data.trades.find(t =>
+    t.curator === parsed.wallet &&
+    t.token === parsed.token &&
+    (Date.now() / 1000 - t.detectedAt) < 3600
+  );
+  if (recent) {
+    console.log(`  Skipping duplicate for ${parsed.token.slice(0, 12)}...`);
+    return;
+  }
+
+  // Also check pending signals
+  const pendingKey = `${parsed.wallet}-${parsed.token}`;
+  if (pendingSignals.has(pendingKey)) {
+    console.log(`  Signal already pending confirmation`);
+    return;
+  }
+
+  console.log(`\n🎯 CURATOR BUY DETECTED`);
+  console.log(`  Curator: ${parsed.wallet.slice(0, 12)}...`);
+  console.log(`  Token: ${parsed.token}`);
+  console.log(`  ⏳ Waiting ${CONFIRMATION_DELAY_MS / 1000}s for confirmation...`);
+
+  // Add to pending signals
+  pendingSignals.set(pendingKey, {
+    signature,
+    wallet: parsed.wallet,
+    token: parsed.token,
+    detectedAt: Date.now(),
+  });
+
+  // Schedule confirmation check
+  setTimeout(async () => {
+    const signal = pendingSignals.get(pendingKey);
+    if (!signal) return;
+
+    pendingSignals.delete(pendingKey);
+
+    // Reload data in case it changed
+    const freshData = await loadPaperTrades();
+    await processConfirmedSignal(signal, freshData);
+  }, CONFIRMATION_DELAY_MS);
 }
 
 async function main() {
-  console.log("=== Live Curator Monitor ===\n");
-  console.log("Watching curator wallets for new BAGS token buys.");
-  console.log("Forward returns will be tracked at +1h, +6h, +24h.\n");
+  console.log("=== Live Curator Monitor v2 ===\n");
+  console.log("Enhanced with: executable returns, liquidity tracking, confirmation delay\n");
+  console.log(`Confirmation delay: ${CONFIRMATION_DELAY_MS / 1000}s`);
+  console.log(`Test position size: $${TEST_POSITION_SIZE_USD}\n`);
 
   if (!HELIUS_API_KEY) {
     console.error("ERROR: HELIUS_API_KEY not set");
@@ -374,10 +590,11 @@ async function main() {
   let data = await loadPaperTrades();
   console.log(`Loaded ${data.trades.length} existing paper trades`);
   console.log(`  Complete: ${data.completeSignals}`);
-  console.log(`  Pending: ${data.trades.length - data.completeSignals}\n`);
+  console.log(`  Pending: ${data.trades.length - data.completeSignals}`);
+  console.log(`  Unexitable: ${data.summary.unexitableCount || 0}\n`);
 
   // Check pending trades immediately
-  console.log("Checking pending trades for price updates...");
+  console.log("Checking pending trades...");
   await checkPendingTrades(data);
 
   // Print current summary
@@ -386,13 +603,13 @@ async function main() {
     const s = data.summary;
     console.log(`Signals: ${data.totalSignals} total, ${data.completeSignals} complete`);
     if (s.avgNetReturn1h !== null) {
-      console.log(`1h: ${s.avgNetReturn1h.toFixed(1)}% avg net, ${s.winRate1h?.toFixed(0)}% win rate`);
+      console.log(`1h Price:  ${s.avgNetReturn1h.toFixed(1)}% avg net, ${s.winRate1h?.toFixed(0)}% win`);
+    }
+    if (s.avgExecReturn1h !== null) {
+      console.log(`1h Exec:   ${s.avgExecReturn1h.toFixed(1)}% avg (feasible: ${s.exitFeasibleRate1h?.toFixed(0)}%)`);
     }
     if (s.avgNetReturn6h !== null) {
-      console.log(`6h: ${s.avgNetReturn6h.toFixed(1)}% avg net, ${s.winRate6h?.toFixed(0)}% win rate`);
-    }
-    if (s.avgNetReturn24h !== null) {
-      console.log(`24h: ${s.avgNetReturn24h.toFixed(1)}% avg net, ${s.winRate24h?.toFixed(0)}% win rate`);
+      console.log(`6h Price:  ${s.avgNetReturn6h.toFixed(1)}% avg net, ${s.winRate6h?.toFixed(0)}% win`);
     }
     console.log("");
   }
@@ -402,13 +619,11 @@ async function main() {
   console.log(`Monitoring ${CURATOR_WALLETS.length} curator wallets\n`);
 
   const wsUrl = `wss://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
-
   const ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {
     console.log("WebSocket connected");
 
-    // Subscribe to all curator wallets
     for (const wallet of CURATOR_WALLETS) {
       const subscribeMsg = {
         jsonrpc: "2.0",
@@ -430,12 +645,8 @@ async function main() {
     try {
       const message = JSON.parse(event.data as string);
 
-      // Handle subscription confirmations
-      if (message.result !== undefined) {
-        return;
-      }
+      if (message.result !== undefined) return;
 
-      // Handle log notifications
       if (message.method === "logsNotification") {
         const logs = message.params?.result?.value;
         if (!logs) return;
@@ -445,13 +656,8 @@ async function main() {
 
         console.log(`Activity detected: ${signature.slice(0, 20)}...`);
 
-        // Reload data in case another process updated it
         data = await loadPaperTrades();
-
-        // Process the transaction
         await handleNewTransaction(signature, data);
-
-        // Check pending trades
         await checkPendingTrades(data);
       }
     } catch (e) {
@@ -470,20 +676,18 @@ async function main() {
 
   // Periodically check pending trades (every 5 minutes)
   setInterval(async () => {
-    console.log("\n[Periodic check] Checking pending trades...");
+    console.log("\n[Periodic check]");
     data = await loadPaperTrades();
     await checkPendingTrades(data);
 
-    // Print current stats
     const s = data.summary;
-    console.log(`Stats: ${data.totalSignals} signals, ${data.completeSignals} complete`);
+    console.log(`Stats: ${data.totalSignals} signals, ${data.completeSignals} complete, ${s.unexitableCount || 0} unexitable`);
     if (s.avgNetReturn1h !== null) {
-      console.log(`  1h: ${s.avgNetReturn1h.toFixed(1)}% net (${s.winRate1h?.toFixed(0)}% win)`);
+      console.log(`  1h: ${s.avgNetReturn1h.toFixed(1)}% price / ${s.avgExecReturn1h?.toFixed(1) || "n/a"}% exec`);
     }
     console.log("");
   }, 5 * 60 * 1000);
 
-  // Keep process alive
   console.log("Monitor running. Press Ctrl+C to stop.\n");
 }
 
