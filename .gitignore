@@ -25,10 +25,9 @@ Thumbs.db
 
 # Logs
 *.log
-logs/
 
 # Reports (generated, may contain sensitive data)
-reports/
+reports/*
 !reports/.gitkeep
 
 # Data (default: ignore everything)
