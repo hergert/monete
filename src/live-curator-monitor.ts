@@ -240,8 +240,9 @@ async function getSellQuote(token: string, amountUsd: number): Promise<ExitFeasi
     const tokenAmount = amountUsd / price;
     const SOL_MINT = "So11111111111111111111111111111111111111112";
 
+    // Note: quote-api.jup.ag/v6 was deprecated Oct 2025, now using lite-api.jup.ag/swap/v1
     const response = await rateLimitedJupiterFetch(
-      `https://quote-api.jup.ag/v6/quote?inputMint=${token}&outputMint=${SOL_MINT}&amount=${Math.floor(tokenAmount * 1e9)}&slippageBps=100`
+      `https://lite-api.jup.ag/swap/v1/quote?inputMint=${token}&outputMint=${SOL_MINT}&amount=${Math.floor(tokenAmount * 1e9)}&slippageBps=100`
     );
 
     if (!response.ok) {
