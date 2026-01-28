@@ -1,17 +1,53 @@
 # Current Status - Monenete Project
 
-**Last Updated:** 2026-01-28 17:35 UTC
+**Last Updated:** 2026-01-28 19:15 UTC
 **Status:** LIVE PAPER TRADING - DATA COLLECTION PHASE
 
 ---
 
-## Early Results (Promising!)
+## What We're Doing
 
-After ~40 minutes of monitoring:
-- **8 signals** detected (all from curator HydraXoSz7oE)
-- **First trade up +55%** from entry (well above 2.14% fee threshold)
+Testing if **curator wallets** (slow traders with historical positive returns) pick tokens that outperform over 6 hours.
 
-This is encouraging but too early to conclude. Need 50+ signals across multiple curators.
+**The question:** Do these wallets have selection skill?
+
+**If yes:** Real trading with small positions
+**If no:** Pivot to partner-fee business model
+
+---
+
+## Current Results (2026-01-28 19:15 UTC)
+
+| Metric | Value |
+|--------|-------|
+| Signals collected | 14 |
+| With 1h data | 10 |
+| **Avg net return at 1h** | **+21.0%** |
+| **Win rate at 1h** | **70%** |
+
+**Distribution:**
+- 4 big winners (+45% to +155%)
+- 3 breakeven (~0%)
+- 3 losers (-24% to -74%)
+
+**Key insight:** Fat-tail distribution. Big winners drive the average.
+
+---
+
+## What We're Waiting For
+
+1. **6h data** - First checks in ~4 hours
+2. **More signals** - Target 50+ for statistical significance
+3. **Curator diversity** - All signals from 1 curator so far (need 12)
+
+---
+
+## Observations So Far
+
+1. **Edge appears real** - +21% avg at 1h is strong
+2. **Liquidity death** - Some tokens lose liquidity within hours
+3. **Outliers matter** - One +155% winner significantly impacts average
+4. **Too early to conclude** - Need more data
 
 ---
 

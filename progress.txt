@@ -2,6 +2,111 @@
 
 ---
 
+## WHAT WE'RE DOING RIGHT NOW
+
+### The Experiment
+
+We're running a **live paper trading test** to answer one question:
+
+> **Do curator wallets pick tokens that outperform over 6 hours?**
+
+If yes → We have a latency-tolerant trading edge
+If no → Pivot to partner-fee business model
+
+### How It Works
+
+1. **Monitor 12 "curator" wallets** - These are wallets we identified with historical positive returns and multi-hour hold times
+2. **When a curator buys a BAGS token** - We log the entry price
+3. **Check price at +1h, +6h, +24h** - Calculate forward returns
+4. **Subtract 2.14% fees** - Get net return
+5. **Accumulate statistics** - Need 50+ signals for confidence
+
+### What We're Looking For
+
+| Question | How We'll Know |
+|----------|----------------|
+| Is there positive edge? | Avg net return > 0% at 6h |
+| Is it statistically significant? | 95% CI lower bound > 0% |
+| Is it consistent? | Win rate > 50%, across multiple curators |
+| Is it tradeable? | Tokens stay liquid long enough to exit |
+
+### Why This Approach
+
+**Previous strategies failed:**
+- Copy trading: 2.4s latency killed the edge
+- Creator claims: Only 2 data points
+- Fee velocity: Lagging indicator, bought tops
+
+**This is different:**
+- We don't copy their exits - we use our own (6h time-based)
+- Latency is irrelevant for 6h holds
+- We're testing selection skill, not execution speed
+
+---
+
+## CURRENT STATUS (2026-01-28 19:15 UTC)
+
+### Live Monitor
+
+```
+tmux session: curator (RUNNING)
+Signals collected: 14
+With 1h data: 10
+Waiting for: 6h data (first check in ~4 hours)
+```
+
+### Early Results (Promising but Preliminary)
+
+| Metric | Value |
+|--------|-------|
+| Avg net return at 1h | **+21.0%** |
+| Win rate at 1h | **70%** |
+| Signals from curators | 1 of 12 (HydraXoSz7oE only) |
+
+### Distribution of 1h Returns
+
+```
+WINNERS (7/10):
+  +155%  8ZjrauSw ← outlier, still running at +200%
+   +73%  8116V1BW
+   +58%  7hBqjJVA
+   +45%  AWc8uws9
+    +2%  FtX6b1fv
+    +2%  DEffWzJy
+     0%  Fnmq5udT
+
+LOSERS (3/10):
+   -24%  DzrScTJ3
+   -32%  Dq3Fwkvo
+   -74%  Bp4GH9iX ← now dead, no liquidity
+```
+
+### Key Observations
+
+1. **Fat-tail distribution** - Big winners (+155%, +73%) offset losers
+2. **Liquidity death** - Some tokens lose liquidity within hours
+3. **One curator dominance** - All signals from HydraXoSz7oE so far
+4. **Too early to conclude** - Need 50+ signals, multiple curators, 6h data
+
+### What Happens Next
+
+| Time | Event |
+|------|-------|
+| +4 hours | First 6h price checks |
+| +22 hours | First 24h price checks |
+| +1-2 weeks | Reach 50+ signals |
+| Then | Run `./scripts/analyze-curator-results.sh` for decision |
+
+### How to Check Progress
+
+```bash
+./scripts/curator-status.sh          # Quick status
+tmux attach -t curator               # Live output
+cat reports/paper_trades_curator.json | jq '.summary'  # Stats
+```
+
+---
+
 ## SESSION SUMMARY: 2026-01-28 (Complete Journey)
 
 ### What We Set Out To Do
@@ -592,6 +697,78 @@ This curator (0.1% historical P&L, lowest in our list) is generating many signal
 - 1h check on first trade: ~17:51 UTC
 - More signals from other curators
 - Enough data (50+) for statistical significance
+
+### First Real Results (2026-01-28 19:05 UTC)
+
+**After ~2 hours of monitoring:**
+
+| Metric | Value |
+|--------|-------|
+| Total signals | 14 |
+| With 1h data | 10 |
+| **Avg net return at 1h** | **+21.0%** |
+| **Win rate at 1h** | **70%** |
+
+**Distribution of 1h returns (sorted):**
+```
++155%  8ZjrauSw (big winner)
+ +73%  8116V1BW (big winner)
+ +58%  7hBqjJVA (big winner)
+ +45%  AWc8uws9 (big winner)
+  +2%  FtX6b1fv (breakeven)
+  +2%  DEffWzJy (breakeven)
+   0%  Fnmq5udT (breakeven)
+ -24%  DzrScTJ3 (loser)
+ -32%  Dq3Fwkvo (loser)
+ -74%  Bp4GH9iX (big loser)
+```
+
+**KEY INSIGHT: Fat-tail distribution**
+- This is classic momentum/selection alpha
+- You have losers (30% of trades), some big (-74%)
+- But the winners win MUCH bigger (+155%, +73%, +58%, +45%)
+- The math works: big wins > losses = positive EV
+
+**Why this matters:**
+1. The strategy appears to have real edge (+21% avg at 1h)
+2. 70% win rate is strong
+3. The edge isn't from avoiding losers - it's from catching outlier winners
+4. This matches our thesis: curators have selection skill
+
+**Cautions:**
+- Still n=10, need more data
+- All signals from one curator (HydraXoSz7oE)
+- Could be a lucky day - need to see consistency
+- Need 6h and 24h data to confirm edge persists
+
+**What to watch next:**
+- Do 6h returns stay positive? (first 6h check in ~4h)
+- Does the distribution hold with more signals?
+- Do other curators show similar patterns?
+
+### Trajectory Observation (2026-01-28 19:10 UTC)
+
+Checked current prices vs 1h prices:
+
+| Token | At 1h | Now (~2h) | Status |
+|-------|-------|-----------|--------|
+| 8ZjrauSw | +155% | +200% | Still running, liquid |
+| 8116V1BW | +73% | null | Lost liquidity? |
+| 7hBqjJVA | +58% | null | Lost liquidity? |
+| Bp4GH9iX | -74% | null | Dead, no liquidity |
+| Dq3Fwkvo | -32% | still has data | Liquid but down |
+
+**INSIGHT: Liquidity death is common**
+- Many of these micro-cap tokens lose liquidity quickly
+- The big winner (+200%) stayed liquid because volume attracted more trading
+- Losers and mid-performers can become untradeable
+- This is a real execution risk: you might not be able to exit
+
+**Implication for strategy:**
+- Need to exit winners while they're still liquid
+- Time-based exits (6h) might miss the liquidity window
+- Could consider: exit when up X% rather than waiting for time
+- Or: smaller positions to reduce exit impact
 ```
 Curator: HydraXoSz7oE3774DoWQQaofKb31Kbn2cbcqG4ShKy85
 Token: 8ZjrauSwkyxDPbHhQPtbANbQbRXuVKRzd7RDK5gpBAGS
