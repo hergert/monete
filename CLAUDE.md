@@ -1,73 +1,35 @@
-# Claude Rules (Monenete)
+# Monenete - Claude Rules
 
-## Core Principle: Honest Work
+## What Is This Project?
 
-You're building a real trading system. Fake data leads to fake confidence leads to real losses.
+**Monenete** is a Solana trading bot for **Bags.fm** (a token launchpad like pump.fun).
 
-## What Honesty Looks Like
+**Current strategy:** We're testing if "curator wallets" (traders with historically good picks) select tokens that outperform over 6 hours. If yes → real trading. If no → pivot.
 
-**On data:**
-- If an API returns nothing, that's a FAIL, not a placeholder
-- If you can't get real quotes, document the blocker, don't synthesize
-- All data in `reports/paper_trades_curator.json` is from real API calls
+**Why this approach:** Copy-trading failed (2.4s latency kills the edge). This strategy ignores timing - we only care if their picks go up over hours, not seconds.
 
-**On metrics:**
-- Zero signals is SKIPPED, not PASS
-- A failing experiment that's honest is better than a passing one that's fake
-- Document negative results - they inform pivots
+---
 
-**On blockers:**
-- If you need something you don't have, stop and say so
-- "I need a Helius API key" is a valid stopping point
-- NEED_HUMAN is not failure, it's honesty
+## Start Here
 
-## Context: You're Part of a Chain
+**Before doing anything, read these files in order:**
 
-Previous work exists in:
-- `CURRENT_STATUS.md` - what's running, what we're waiting for
-- `progress.txt` - what was done, what worked, what blocked
-- `git log` - what was committed
-- `reports/` - paper trade results
+1. `CURRENT_STATUS.md` - What's running now, what we're waiting for, decision criteria
+2. `progress.txt` - Full history, failed strategies, learnings, context
 
-Read these. Learn from them. Don't repeat mistakes.
+These files ARE the project memory. Without reading them, you'll repeat mistakes.
 
-## When to Stop
+---
 
-Stop and signal NEED_HUMAN when:
-- You need credentials you don't have
-- You need real data you can't fetch
-- Something should work but doesn't after 3 attempts
-- The honest answer is "this requires human judgment"
+## Key Terms
 
-## Working Rules
+- **Bags.fm** - Token launchpad on Solana. Tokens have 1% creator royalty per trade (2.14% round-trip).
+- **Curator wallets** - 12 wallets we identified as "slow traders" with historical positive returns. Listed in `reports/slow_traders.json`.
+- **BAGS tokens** - Tokens launched on Bags.fm platform. Detected via Fee Share program on-chain.
+- **Signal** - When a curator wallet buys a BAGS token. We log entry price and check returns at +1h, +6h, +24h.
+- **Complete signal** - A signal with 6h return data. This is our primary metric.
 
-1. **Smallest diff** that solves the problem
-2. **No speculative work** — don't over-engineer
-3. **Verify before claiming progress** — run `./scripts/verify.sh` when changing code
-4. **Fix root cause** — don't patch symptoms
-5. **Autonomy > questions** — if uncertain, choose the simplest safe assumption and document it
-
-## Commits
-
-Commit when:
-- `./scripts/verify.sh` passes (lint + typecheck)
-- You completed meaningful work
-
-Commit format:
-- single line message, no body
-- no Co-Authored-By
-- never commit secrets
-
-## Security
-
-- Never commit `.env`, API keys, or keypairs
-- No secrets in logs or error messages
-
-## Getting Up to Speed
-
-Read these in order:
-1. `CURRENT_STATUS.md` - what's running now, what we're waiting for
-2. `progress.txt` - full history, learnings, strategy context
+---
 
 ## Journaling (Required)
 
@@ -80,105 +42,139 @@ Read these in order:
 
 Journal as you go, not just at the end. Future sessions depend on this context.
 
-Format: append to the file with a timestamp header like `## 2026-01-28 - [Topic]`
-
-## Key Files
-
-- `src/live-curator-monitor.ts` - the live monitor
-- `reports/paper_trades_curator.json` - collected data
-- `reports/slow_traders.json` - the 12 curator wallets
+Format: append with timestamp header like `## 2026-01-28 - [Topic]`
 
 ---
 
-## Operations Guide
+## Key Files
 
-### Check if monitor is running
+| File | Purpose |
+|------|---------|
+| `src/live-curator-monitor.ts` | The live monitor (runs in tmux) |
+| `reports/paper_trades_curator.json` | Collected signal data |
+| `reports/slow_traders.json` | The 12 curator wallet addresses |
+| `CURRENT_STATUS.md` | Current state and decision criteria |
+| `progress.txt` | Full project history and learnings |
+
+---
+
+## Operations
+
+### Check status
+```bash
+./scripts/curator-status.sh
+```
+
+### Is monitor running?
 ```bash
 tmux has-session -t curator 2>/dev/null && echo "Running" || echo "Not running"
 ```
 
-### Quick status check
-```bash
-./scripts/curator-status.sh
-```
-Shows: signal count, pending trades, time to next 6h check, 1h performance stats.
-
-### Start the monitor
+### Start monitor
 ```bash
 ./scripts/start-curator-monitor.sh
 ```
-This creates a tmux session named `curator`. Requires env vars:
-- `HELIUS_API_KEY` - for wallet activity detection via WebSocket
-- `BIRDEYE_API_KEY` - for real-time token pricing
+Requires env vars: `HELIUS_API_KEY`, `BIRDEYE_API_KEY`
 
-### View live monitor output
+### View live output
 ```bash
 tmux attach -t curator
-# Detach with: Ctrl+B, then D
+# Detach: Ctrl+B, then D
 ```
 
 ### If monitor crashed
 ```bash
-# Check why it stopped
-tmux has-session -t curator 2>/dev/null || ./scripts/start-curator-monitor.sh
+./scripts/start-curator-monitor.sh
 ```
-Data persists in `reports/paper_trades_curator.json` - monitor resumes tracking existing signals.
+Data persists - monitor resumes tracking existing signals.
 
-### When ready for analysis (50+ signals with 6h data)
+### Run analysis (when 50+ signals have 6h data)
 ```bash
 ./scripts/analyze-curator-results.sh
 ```
 
-### Restart fresh (lose all data)
+### Debug
 ```bash
-tmux kill-session -t curator 2>/dev/null
-rm reports/paper_trades_curator.json
-./scripts/start-curator-monitor.sh
+cat reports/paper_trades_curator.json | jq '.summary'
+cat reports/paper_trades_curator.json | jq '.trades | length'
 ```
 
 ---
 
 ## How the Monitor Works
 
-1. **Detection**: Helius WebSocket watches 12 curator wallets for BAGS token buys
-2. **Entry logging**: On buy detection, fetches current price from Birdeye
-3. **Scheduled checks**: Sets timers for +1h, +6h, +24h price checks
-4. **Return calculation**: Computes net return after 2.14% round-trip fees
-5. **Persistence**: Writes to `reports/paper_trades_curator.json` after each update
+1. **Detection** - Helius WebSocket watches curator wallets for BAGS token buys
+2. **Entry logging** - Fetches current price from Birdeye
+3. **Scheduled checks** - Timers for +1h, +6h, +24h price checks
+4. **Return calculation** - Net return after 2.14% fees
+5. **Persistence** - Writes to `reports/paper_trades_curator.json`
 
-### What "complete" means
-A signal is complete when it has 6h data. The 24h check is optional context.
-
-### Interpreting results
-- **Fat-tail distribution expected**: Big winners (+50-150%) offset losers
-- **Win rate less important than average**: A 40% win rate can be profitable if winners are big
-- **Liquidity death**: Some tokens lose liquidity within hours - these show as large losses
+**Interpreting results:**
+- Fat-tail distribution expected: big winners (+50-150%) offset losers
+- Win rate matters less than average return
+- Some tokens lose liquidity → large losses (expected)
 
 ---
 
-## Key Learnings (Don't Repeat These Mistakes)
+## Key Learnings (Don't Repeat These)
 
-1. **Copy-trading doesn't work**: 2.4s latency kills the edge when traders exit in seconds
-2. **Historical OHLCV not available**: Birdeye doesn't have minute candles for micro-caps, use forward paper trading
-3. **2.14% round-trip fees**: 1% creator royalty per side, verified empirically
-4. **Curator selection is different**: We don't copy exits, we use 6h time-based exit. Latency irrelevant.
+| What Failed | Why | Lesson |
+|-------------|-----|--------|
+| Copy-trading | 2.4s latency, traders exit in seconds | Can't win speed game |
+| Historical backtest | Birdeye has no minute candles for micro-caps | Use forward paper trading |
+| Fee velocity strategy | Lagging indicator, -0.97% avg return | Documented in progress.txt |
+
+**What we know:**
+- 2.14% round-trip fees (1% creator royalty per side) - verified empirically
+- Curator selection works differently: we use 6h time-based exit, not copying their sells
 
 ---
 
-## Quick Commands
+## Working Rules
 
-```bash
-# Operations
-tmux has-session -t curator && echo "Running" || echo "Not running"
-./scripts/curator-status.sh
-./scripts/start-curator-monitor.sh
-./scripts/analyze-curator-results.sh
+1. **Smallest diff** - Don't over-engineer
+2. **No speculative work** - Only build what's needed now
+3. **Verify before commit** - Run `./scripts/verify.sh`
+4. **Fix root cause** - Don't patch symptoms
+5. **Autonomy > questions** - If uncertain, choose simplest safe assumption and document it
 
-# Development
-./scripts/verify.sh          # lint + typecheck
-git status && git log --oneline -5
+---
 
-# Debug
-cat reports/paper_trades_curator.json | jq '.summary'
-cat reports/paper_trades_curator.json | jq '.trades | length'
-```
+## Commits
+
+When:
+- `./scripts/verify.sh` passes
+- You completed meaningful work
+
+Format:
+- Single line message, no body
+- No Co-Authored-By
+- Never commit secrets
+
+---
+
+## When to Stop and Ask
+
+Signal **NEED_HUMAN** (say it explicitly in your response) when:
+- You need credentials you don't have
+- You need real data you can't fetch
+- Something fails after 3 attempts
+- The honest answer requires human judgment
+
+---
+
+## Honesty Principle
+
+You're building a real trading system. Fake data → fake confidence → real losses.
+
+- If an API returns nothing, that's a FAIL, not a placeholder
+- Zero signals is SKIPPED, not PASS
+- Document negative results - they inform pivots
+- A failing experiment that's honest beats a passing one that's fake
+
+---
+
+## Security
+
+- Never commit `.env`, API keys, or keypairs
+- No secrets in logs or error messages
