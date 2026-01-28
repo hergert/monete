@@ -5,7 +5,8 @@
 const BIRDEYE_API_KEY = process.env.BIRDEYE_API_KEY || "";
 const BIRDEYE_BASE_URL = "https://public-api.birdeye.so";
 
-// Expanded list of Bags tokens to analyze
+// Merged list of ALL known Bags tokens (19 total)
+// Sources: Original list + Fee Share V1 discovery (2026-01-28)
 const BAGS_TOKENS = [
   // Original tokens
   "7Mxvi7bi5bnjELB4QNzQ4VrQEPeBgPbWwbfwE1ydBAGS",
@@ -15,11 +16,19 @@ const BAGS_TOKENS = [
   "78a6Cbggc2axnGQyuM5iA91oN1Qt93M95NswhhzPBAGS",
   "ArhUyCSWvDKD7tXcTcgTaYxBkDZiFVkmxzyZXmUJBAGS",
   "ehipS3kn9GUSnEMgtB9RxCNBVfH5gTNRVxNtqFTBAGS",
-  // Recently discovered
   "H5hygVvXiYxk2a3BVtjiqcDJK8TdHTB5u5U1fXEuBAGS",
   "FFEjZnvY1tqHyBAMBPE1DHoEmQWLmxjhvvDs4TaRBAGS",
   "k9BKDF8x9Y6nBbGVL938yPT33h4zo8p8GTsi4wJBAGS",
   "CdyjsXbPs6VamxNk7StU5apXFHAiM7q8FTYAN3rdBAGS",
+  // Discovered from Fee Share V1 program (2026-01-28)
+  "4TnX4sagctNgaN8pWr12LxcHQadiU8adLjm7AobWBAGS",
+  "8hAQzGAmSBnha8bDbudVuQozMRiidAqZyhkWjYxGBAGS",
+  "9yBQVHj2FJnf7XfQWUPQoj3iyMwAXQMxBWD37cwFBAGS",
+  "BpAiFPCqjvnz7ETKjxr6ZpEKKnGGBE7rNZUU7A7eBAGS",
+  "Hcp6rN97umhVg75ukDk9U138j8GowQvxFmXerJinBAGS",
+  "Bgx1mU51pkiJWARsSaGCXaYRBTmmQKqDAyg5QaZxBAGS",
+  "Dbw32CvaXMg7VYGisHaWUQCLDPTJouxTCE4ip4BZBAGS",
+  "AuPMJ2VqiJd6gd2e65ALYhpSctzCYancBYLG5usfBAGS",
 ];
 
 // Minimum hold time to be considered a "slow trader" (in seconds)
@@ -51,8 +60,9 @@ interface Trade {
   token: string;
   side: "buy" | "sell";
   timestamp: number;
-  priceUsd: number;
-  amountUsd: number;
+  priceUsd: number;      // Token price in USD at trade time
+  amountUsd: number;     // USD volume of trade
+  tokenAmount: number;   // Number of tokens traded
 }
 
 interface WalletStats {
@@ -83,14 +93,26 @@ async function getTokenTrades(token: string): Promise<Trade[]> {
     const json = await response.json() as any;
     const items = json.data?.items || [];
 
-    return items.map((item: any) => ({
-      wallet: item.owner,
-      token,
-      side: item.side as "buy" | "sell",
-      timestamp: item.blockUnixTime,
-      priceUsd: item.price || 0,
-      amountUsd: Math.abs(item.volumeUSD || 0),
-    }));
+    return items.map((item: any) => {
+      // Token price at trade time (from basePrice or tokenPrice)
+      const priceUsd = item.basePrice || item.tokenPrice || 0;
+      // Calculate USD volume from SOL side (quote)
+      const solAmount = item.quote?.uiAmount || 0;
+      const solPrice = item.quotePrice || 0;
+      const amountUsd = solAmount * solPrice;
+      // Token amount
+      const tokenAmount = item.base?.uiAmount || 0;
+
+      return {
+        wallet: item.owner,
+        token,
+        side: item.side as "buy" | "sell",
+        timestamp: item.blockUnixTime,
+        priceUsd,
+        amountUsd,
+        tokenAmount,
+      };
+    });
   } catch (e) {
     console.log(`  ⚠️ Error fetching ${token.slice(0, 12)}...: ${e}`);
     return [];
@@ -111,8 +133,9 @@ function analyzeWallet(trades: Trade[]): WalletStats | null {
     tradesByToken.set(trade.token, existing);
   }
 
-  // Calculate hold times from buy-sell pairs
+  // Calculate hold times and P&L from buy-sell pairs
   const holdTimes: number[] = [];
+  const pnlPercents: number[] = [];
   let totalBuyUsd = 0;
   let totalSellUsd = 0;
   let completedRoundTrips = 0;
@@ -123,24 +146,31 @@ function analyzeWallet(trades: Trade[]): WalletStats | null {
 
     const buys = tokenTrades.filter(t => t.side === "buy");
     const sells = tokenTrades.filter(t => t.side === "sell");
+    const usedSells = new Set<number>(); // Track which sells are already matched
 
-    // Match buys with subsequent sells
+    // Match each buy with the next available sell
     for (const buy of buys) {
       totalBuyUsd += buy.amountUsd;
 
-      const matchingSell = sells.find(s => s.timestamp > buy.timestamp);
-      if (matchingSell) {
-        const holdTime = matchingSell.timestamp - buy.timestamp;
-        holdTimes.push(holdTime);
-        totalSellUsd += matchingSell.amountUsd;
-        completedRoundTrips++;
-      }
-    }
+      // Find first unmatched sell after this buy
+      const sellIndex = sells.findIndex((s, i) =>
+        !usedSells.has(i) && s.timestamp > buy.timestamp
+      );
 
-    // Add sells that weren't matched (sold existing holdings)
-    for (const sell of sells) {
-      if (!buys.some(b => b.timestamp < sell.timestamp)) {
+      if (sellIndex !== -1) {
+        const sell = sells[sellIndex];
+        usedSells.add(sellIndex);
+
+        const holdTime = sell.timestamp - buy.timestamp;
+        holdTimes.push(holdTime);
         totalSellUsd += sell.amountUsd;
+        completedRoundTrips++;
+
+        // Calculate P&L based on PRICE change (more accurate than USD volume)
+        if (buy.priceUsd > 0 && sell.priceUsd > 0) {
+          const pnl = ((sell.priceUsd - buy.priceUsd) / buy.priceUsd) * 100;
+          pnlPercents.push(pnl);
+        }
       }
     }
   }
@@ -153,8 +183,14 @@ function analyzeWallet(trades: Trade[]): WalletStats | null {
   const minHoldTime = Math.min(...holdTimes);
   const maxHoldTime = Math.max(...holdTimes);
 
+  // Use price-based P&L if available, otherwise fall back to USD volume
+  let realizedPnlPercent: number;
+  if (pnlPercents.length > 0) {
+    realizedPnlPercent = pnlPercents.reduce((a, b) => a + b, 0) / pnlPercents.length;
+  } else {
+    realizedPnlPercent = totalBuyUsd > 0 ? ((totalSellUsd - totalBuyUsd) / totalBuyUsd) * 100 : 0;
+  }
   const realizedPnlUsd = totalSellUsd - totalBuyUsd;
-  const realizedPnlPercent = totalBuyUsd > 0 ? (realizedPnlUsd / totalBuyUsd) * 100 : 0;
 
   return {
     wallet,

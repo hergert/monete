@@ -94,15 +94,22 @@ async function getWalletTokenTrades(wallet: string, token: string): Promise<Wall
     // Filter for our wallet
     return items
       .filter((item: any) => item.owner === wallet)
-      .map((item: any) => ({
-        txHash: item.txHash,
-        blockUnixTime: item.blockUnixTime,
-        side: item.side as "buy" | "sell",
-        token,
-        tokenAmount: item.from?.uiAmount || item.to?.uiAmount || 0,
-        solAmount: item.volumeUSD / (item.price || 1), // Approximate
-        priceUsd: item.price || 0,
-      }));
+      .map((item: any) => {
+        // Correct Birdeye field parsing
+        const priceUsd = item.basePrice || item.tokenPrice || 0;
+        const solAmount = item.quote?.uiAmount || 0;
+        const tokenAmount = item.base?.uiAmount || 0;
+
+        return {
+          txHash: item.txHash,
+          blockUnixTime: item.blockUnixTime,
+          side: item.side as "buy" | "sell",
+          token,
+          tokenAmount,
+          solAmount,
+          priceUsd,
+        };
+      });
   } catch (e) {
     console.error(`Error fetching trades for ${wallet} on ${token}: ${e}`);
     return [];
