@@ -143,6 +143,67 @@ If the baseline is 0% or negative, copy trading cannot work.
 Establish baseline - what is the average return of buying a random Bags token?
 If baseline is negative, the entire strategy is flawed.
 
+### Baseline Check Results (2026-01-28)
+
+**Method:** src/check-baseline.ts - checked current health of 11 known Bags tokens
+
+**Results:**
+| Status | Count | % |
+|--------|-------|---|
+| Active (tradeable) | 5 | 45% |
+| Low liquidity | 1 | 9% |
+| Unknown (likely dead) | 5 | 45% |
+
+**Active tokens 24h performance:**
+- FFEjZnvY...BAGS: +173.5% (outlier - $119k volume)
+- ehipS3kn...BAGS: +32.2%
+- 7Mxvi7bi...BAGS: -14.7%
+- CdyjsXbP...BAGS: -0.6%
+
+**Key observations:**
+1. ~45% of tokens have no Birdeye data (likely dead/rugged)
+2. Liquidity is low ($8k-$29k per token)
+3. High variance: one token +173%, another -15%
+4. Sample too small for definitive conclusion
+
+**Honest assessment:**
+- Survival rate ~55% is marginal
+- High variance suggests luck > skill
+- Low liquidity makes execution risky
+- Need larger sample (50+ tokens) to be conclusive
+
+---
+
+## Conclusions (2026-01-28)
+
+### What We Proved
+1. **Live detection works** - 1.4s avg latency via Helius WebSocket
+2. **Paper trading captures prices** - Birdeye API integration working
+3. **Wallet validation works** - Can filter insiders/deployers
+
+### What We Discovered
+1. **Backtest shows negative EV** - Following our wallets with 2.4s delay = -1.06%
+2. **No profitable slow traders exist** - All 52 wallets with round trips show 0% P&L
+3. **~45% of Bags tokens are dead** - High failure rate
+4. **Low liquidity** - $8k-$29k makes large trades impossible
+
+### Root Cause Analysis
+The strategy fails because:
+1. **Latency kills edge** - 2.4s is too slow for fast-moving memecoins
+2. **Small sample** - Only 11 tokens, need 50+ for statistical significance
+3. **Platform risk** - Bags.fm tokens have high failure rate
+
+### Recommendation
+**PAUSE** the Bags.fm copy trading strategy.
+
+Options:
+A. **Expand research** - Get 50+ Bags tokens, rerun analysis
+B. **Reduce latency** - Expensive, may not be enough
+C. **Pivot platform** - Try pump.fun or other platforms
+D. **Pivot strategy** - Not copy trading (e.g., launch sniping)
+
+The PLAN.md was correct: "Smart money convergence collapses when latency erases alpha."
+
 ---
 
 ### Live Validation Results (2026-01-28)
