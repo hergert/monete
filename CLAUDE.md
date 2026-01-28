@@ -69,6 +69,19 @@ Read these in order:
 1. `CURRENT_STATUS.md` - what's running now, what we're waiting for
 2. `progress.txt` - full history, learnings, strategy context
 
+## Journaling (Required)
+
+**Always journal to `progress.txt`:**
+- Findings from data analysis
+- Ideas and hypotheses
+- What worked and what didn't
+- Learnings and insights
+- Decisions and their rationale
+
+Journal as you go, not just at the end. Future sessions depend on this context.
+
+Format: append to the file with a timestamp header like `## 2026-01-28 - [Topic]`
+
 ## Key Files
 
 - `src/live-curator-monitor.ts` - the live monitor
