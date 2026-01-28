@@ -63,15 +63,6 @@ Commit format:
 - Never commit `.env`, API keys, or keypairs
 - No secrets in logs or error messages
 
-## Quick Commands
-
-```bash
-./scripts/verify.sh          # lint + typecheck
-./scripts/curator-status.sh  # paper trade status
-./scripts/start-curator-monitor.sh  # start monitor
-./scripts/analyze-curator-results.sh  # statistical analysis
-```
-
 ## Current Strategy: Curator Selection
 
 **The question:** Do curator wallets (slow traders with historical positive returns) pick tokens that outperform over 6 hours?
@@ -86,3 +77,98 @@ Commit format:
 - 95% CI lower bound > 0% → proceed to real trading
 - Mean > 0% but CI includes 0 → continue paper trading
 - Mean ≤ 0% → pivot
+
+---
+
+## Operations Guide
+
+### Check if monitor is running
+```bash
+tmux has-session -t curator 2>/dev/null && echo "Running" || echo "Not running"
+```
+
+### Quick status check
+```bash
+./scripts/curator-status.sh
+```
+Shows: signal count, pending trades, time to next 6h check, 1h performance stats.
+
+### Start the monitor
+```bash
+./scripts/start-curator-monitor.sh
+```
+This creates a tmux session named `curator`. Requires env vars:
+- `HELIUS_API_KEY` - for wallet activity detection via WebSocket
+- `BIRDEYE_API_KEY` - for real-time token pricing
+
+### View live monitor output
+```bash
+tmux attach -t curator
+# Detach with: Ctrl+B, then D
+```
+
+### If monitor crashed
+```bash
+# Check why it stopped
+tmux has-session -t curator 2>/dev/null || ./scripts/start-curator-monitor.sh
+```
+Data persists in `reports/paper_trades_curator.json` - monitor resumes tracking existing signals.
+
+### When ready for analysis (50+ signals with 6h data)
+```bash
+./scripts/analyze-curator-results.sh
+```
+
+### Restart fresh (lose all data)
+```bash
+tmux kill-session -t curator 2>/dev/null
+rm reports/paper_trades_curator.json
+./scripts/start-curator-monitor.sh
+```
+
+---
+
+## How the Monitor Works
+
+1. **Detection**: Helius WebSocket watches 12 curator wallets for BAGS token buys
+2. **Entry logging**: On buy detection, fetches current price from Birdeye
+3. **Scheduled checks**: Sets timers for +1h, +6h, +24h price checks
+4. **Return calculation**: Computes net return after 2.14% round-trip fees
+5. **Persistence**: Writes to `reports/paper_trades_curator.json` after each update
+
+### What "complete" means
+A signal is complete when it has 6h data. The 24h check is optional context.
+
+### Interpreting results
+- **Fat-tail distribution expected**: Big winners (+50-150%) offset losers
+- **Win rate less important than average**: A 40% win rate can be profitable if winners are big
+- **Liquidity death**: Some tokens lose liquidity within hours - these show as large losses
+
+---
+
+## Key Learnings (Don't Repeat These Mistakes)
+
+1. **Copy-trading doesn't work**: 2.4s latency kills the edge when traders exit in seconds
+2. **Historical OHLCV not available**: Birdeye doesn't have minute candles for micro-caps, use forward paper trading
+3. **2.14% round-trip fees**: 1% creator royalty per side, verified empirically
+4. **Curator selection is different**: We don't copy exits, we use 6h time-based exit. Latency irrelevant.
+
+---
+
+## Quick Commands
+
+```bash
+# Operations
+tmux has-session -t curator && echo "Running" || echo "Not running"
+./scripts/curator-status.sh
+./scripts/start-curator-monitor.sh
+./scripts/analyze-curator-results.sh
+
+# Development
+./scripts/verify.sh          # lint + typecheck
+git status && git log --oneline -5
+
+# Debug
+cat reports/paper_trades_curator.json | jq '.summary'
+cat reports/paper_trades_curator.json | jq '.trades | length'
+```
