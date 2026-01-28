@@ -1,4 +1,10 @@
 {
+  "exclude": [
+    "src/archive/**",
+    "src/*-backtest.ts",
+    "src/find-slow-traders.ts",
+    "src/curator-forward-return.ts"
+  ],
   "compilerOptions": {
     // Environment setup & latest features
     "lib": ["ESNext"],
